@@ -29,10 +29,6 @@ Write-Host "Script Run Time: $(Get-Date)"
 function Enable-Updates {
     Write-Host "`n--- Starting: Enable updates ---`n"
 }
-
-function User-Auditing {
-    Write-Host "`n--- Starting: User Auditing ---`n"
-}
 function User-Auditing {
     Write-Host "`n--- Starting: User Auditing ---`n"
 

@@ -32,9 +32,9 @@ function Enable-Updates {
 function User-Auditing {
     Write-Host "`n--- Starting: User Auditing ---`n"
 
-    # Get local users
+        # Loop through every local user account and prompt for authorization
     $localUsers = Get-LocalUser
-
+    
     foreach ($user in $localUsers) {
         # Skip system/built-in/current accounts
         if (
@@ -44,10 +44,10 @@ function User-Auditing {
             Write-Host "Skipping system or currently logged-in account: $($user.Name)"
             continue
         }
-
-        # Prompt
+    
+        # Prompt for authorization
         $response = Read-Host "Is '$($user.Name)' an Authorized User? (Y/n) [Default: Y]"
-
+    
         if ($response -eq "" -or $response -match "^[Yy]$") {
             Write-Host "'$($user.Name)' marked as Authorized.`n"
         } elseif ($response -match "^[Nn]$") {

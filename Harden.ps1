@@ -32,6 +32,12 @@ function Enable-Updates {
 function User-Auditing {
     Write-Host "`n--- Starting: User Auditing ---`n"
 
+# Self-elevate to run as Administrator
+if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")) {
+    Write-Host "Restarting script as Administrator..."
+    Start-Process -FilePath "powershell.exe" -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`"" -Verb RunAs
+    exit
+}
         # Loop through every local user account and prompt for authorization
     $localUsers = Get-LocalUser
     

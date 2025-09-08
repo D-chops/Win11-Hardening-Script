@@ -15,6 +15,7 @@ $menuOptions = @(
     "document the system",
     "enable updates",
     "user auditing",
+    "Admin Auditing"
     "exit"
     )
     # Define functions for each option
@@ -70,6 +71,22 @@ function User-Auditing {
     }
 
     Write-Host "`n--- User Auditing Complete ---`n"
+}
+function Admin-Auditing {
+    Write-Host "`n--- Starting: Admin Auditing ---`n"
+
+    # Loop through all users with Administrator permissions
+$adminGroup = Get-LocalGroupMember -Group 'Administrators'
+foreach ($admin in $adminGroup) {
+    $default = 'Y'
+    $prompt = "Is '$($admin.Name)' an Authorized Administrator? [Y/n]: "
+    $answer = Read-Host -Prompt $prompt
+    if ([string]::IsNullOrWhiteSpace($answer)) { $answer = $default }
+    if ($answer -match '^[Nn]$') {
+        Write-Host "Removing '$($admin.Name)' from Administrators group"
+        Remove-LocalGroupMember -Group 'Administrators' -Member $admin.Name
+    }
+}
 }
 # Menu loop
 :menu do {

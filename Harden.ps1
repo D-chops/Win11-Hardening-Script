@@ -36,16 +36,20 @@ function User-Auditing {
 function User-Auditing {
     Write-Host "`n--- Starting: User Auditing ---`n"
 
-    # Get local user accounts
+    # Get local users
     $localUsers = Get-LocalUser
 
     foreach ($user in $localUsers) {
-        # Skip default or built-in accounts if you want (optional)
-        if ($user.Name -in @("Administrator", "Guest", "DefaultAccount", "WDAGUtilityAccount")) {
+        # Skip system/built-in/current accounts
+        if (
+            $user.Name -in @("Administrator", "Guest", "DefaultAccount", "WDAGUtilityAccount") -or
+            $user.Name -eq $env:USERNAME
+        ) {
+            Write-Host "Skipping system or currently logged-in account: $($user.Name)"
             continue
         }
 
-        # Prompt for confirmation
+        # Prompt
         $response = Read-Host "Is '$($user.Name)' an Authorized User? (Y/n) [Default: Y]"
 
         if ($response -eq "" -or $response -match "^[Yy]$") {
@@ -55,18 +59,13 @@ function User-Auditing {
                 Remove-LocalUser -Name $user.Name -ErrorAction Stop
                 Write-Host "'$($user.Name)' has been removed.`n"
             } catch {
-                Write-Host "Error removing '$($user.Name)': $_`n"
+                Write-Host "⚠️ Access Denied or Error removing '$($user.Name)': $_`n"
             }
         } else {
             Write-Host "Invalid input. Skipping user '$($user.Name)'.`n"
         }
     }
-if (
-    $user.Name -in @("Administrator", "Guest", "DefaultAccount", "WDAGUtilityAccount") -or 
-    $user.Name -eq $env:USERNAME
-) {
-    continue
-}
+
     Write-Host "`n--- User Auditing Complete ---`n"
 }
 # Menu loop

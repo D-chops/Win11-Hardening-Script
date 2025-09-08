@@ -61,7 +61,12 @@ function User-Auditing {
             Write-Host "Invalid input. Skipping user '$($user.Name)'.`n"
         }
     }
-
+if (
+    $user.Name -in @("Administrator", "Guest", "DefaultAccount", "WDAGUtilityAccount") -or 
+    $user.Name -eq $env:USERNAME
+) {
+    continue
+}
     Write-Host "`n--- User Auditing Complete ---`n"
 }
 # Menu loop

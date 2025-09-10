@@ -54,9 +54,6 @@ $menuOptions = @(
     "Application Security Settings",
     "exit"
 )
-function Document-System {
-    Write-Host "`n--- Starting: Document the system ---`n"
-}
 # Display the computer's hostname
 Write-Host "Computer Name: $env:COMPUTERNAME"
 
@@ -67,6 +64,27 @@ Write-Host "Computer Name: $env:COMPUTERNAME"
 Write-Host "Windows Version:"
 Get-ComputerInfo | Select-Object -Property WindowsProductName, WindowsVersion, OsHardwareAbstractionLayer
 Write-Host "Script Run Time: $(Get-Date)"
+
+function Document-System {
+    Write-Host "`n--- Starting: Document the system ---`n"
+       $PUSER = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name.Split('\')[-1]
+       $DOCS  = "C:\Users\$PUSER\Desktop\DOCS"
+    if (-Not (Test-Path -Path $DOCS)) {
+    New-Item -Path $DOCS -ItemType Directory | Out-Null
+}
+    
+    if (-not (Test-Path -Path $folderPath)) {
+        New-Item -Path $folderPath -ItemType Directory | Out-Null
+        Write-Host "Created folder: $folderPath"
+    } else {
+        Write-Host "Folder already exists: $folderPath"
+    }
+ 
+$PUSER = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name.Split('\')[-1]
+$DOCS = "C:\Users\$PUSER\Desktop\DOCS"
+Get-LocalUser | Out-File -FilePath "$DOCS\LocalUsers.txt"
+}
+
 
 function Enable-Updates {
     Write-Host "`n--- Starting: Enable updates ---`n"

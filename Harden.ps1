@@ -11,6 +11,14 @@ $LockoutDuration   = 10   # minutes an account remains locked
 $LockoutWindow     = 10   # minutes in which bad logons are counted
 $TempPassword      = '1CyberPatriot!' # temporary password for new or reset accounts
 
+# Color variables for Write-Host output
+$ColorHeader      = 'Cyan'       # For section headers
+$ColorPrompt      = 'Yellow'     # For prompts
+$ColorName        = 'Green'      # For emphasized names
+$ColorKept        = 'Green'      # For kept lines/messages
+$ColorRemoved     = 'Red'        # For removed lines/messages
+$ColorWarning     = 'DarkYellow' # For warnings
+
 # =======================
 # Variables Section - End
 
@@ -62,6 +70,43 @@ Write-Host "Script Run Time: $(Get-Date)"
 
 function Enable-Updates {
     Write-Host "`n--- Starting: Enable updates ---`n"
+}
+function Review-GroupMembers {
+    param (
+        [Parameter(Mandatory=$true)]
+        [string]$GroupName
+    )
+
+    Write-Host "`nReviewing members of group: " -NoNewline
+    Write-Host "$GroupName" -ForegroundColor $ColorName
+
+    try {
+        $members = Get-LocalGroupMember -Group $GroupName -ErrorAction Stop
+    } catch {
+        Write-Host "Group '$GroupName' not found or error occurred." -ForegroundColor $ColorWarning
+        return
+    }
+
+    foreach ($member in $members) {
+        Write-Host "Is " -NoNewline
+        Write-Host "$($member.Name)" -ForegroundColor $ColorName -NoNewline
+        Write-Host " authorized to be in " -NoNewline
+        Write-Host "$GroupName" -ForegroundColor $ColorName -NoNewline
+        Write-Host "? [Y/n] (default Y)" -ForegroundColor $ColorPrompt -NoNewline
+        $response = Read-Host
+
+        if ($response -match '^[Nn]') {
+            try {
+                Remove-LocalGroupMember -Group $GroupName -Member $member.Name -ErrorAction Stop
+                Write-Host "'$($member.Name)' removed from '$GroupName'." -ForegroundColor $ColorRemoved
+            } catch {
+                Write-Host "Failed to remove '$($member.Name)': $_" -ForegroundColor $ColorWarning
+            }
+        } else {
+            Write-Host "'$($member.Name)' kept in '$GroupName'." -ForegroundColor $ColorKept
+        }
+    }
+    Write-Host "`nReview complete for group: $GroupName" -ForegroundColor $ColorHeader
 }
 function User-Auditing {
     Write-Host "`n--- Starting: User Auditing ---`n"
@@ -143,6 +188,7 @@ Write-Host "Passwords for all users set to temporary value and will require chan
 }
 function Admin-Auditing {
     Write-Host "`n--- Starting: Admin Auditing ---`n"
+    Review-GroupMembers -GroupName 'Administrators'
 
     # Loop through all users with Administrator permissions
 $adminGroup = Get-LocalGroupMember -Group 'Administrators'

@@ -237,6 +237,7 @@ function service-Auditing {
         'Telnet',
         'SNMP',
         'Browser'
+    )
                 foreach ($svc in $ServicesToDisable) {
             try {
                 $service = Get-Service -Name $svc -ErrorAction Stop

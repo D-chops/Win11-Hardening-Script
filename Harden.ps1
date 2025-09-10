@@ -1,3 +1,13 @@
+# =========================
+# Variables Section - Start
+# =========================
+
+$MaxPasswordAge = 60
+
+# =======================
+# Variables Section - End
+# =======================
+
 # Self-elevate to run as Administrator
 if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")) {
     Write-Host "Restarting script as Administrator..."
@@ -101,6 +111,9 @@ foreach ($admin in $adminGroup) {
 }
 function account-Policies {
     Write-Host "`n--- Starting: Account-Policies ---`n"
+    Write-Host "Setting maximum password age to $MaxPasswordAge days..."
+    net accounts /maxpwage:$MaxPasswordAge
+    Write-Host "`n--- Account-Policies Complete ---`n"
 }
 function local-Policies {
     Write-Host "`n--- Starting: Local Policies ---`n"

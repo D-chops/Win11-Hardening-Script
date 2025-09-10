@@ -102,11 +102,11 @@ function User-Auditing {
             Set-LocalUser -Name $user.Name -Password (ConvertTo-SecureString $TempPassword -AsPlainText -Force)
             Set-LocalUser -Name $user.Name -PasswordNeverExpires $false
             Set-LocalUser -Name $user.Name -UserMayChangePassword $true
-            Write-Host "Password for '$($user.Name)' set to temporary value and will require change at next logon."
         } catch {
-            Write-Host "Failed to update password for '$($user.Name)': $_"
+           Write-Host "Failed to update password for '$($user.Name)': $_"
         }
     }
+    Write-Host "Passwords for all users set to temporary value and will require change at next logon."
 
     # Disable and rename Guest account
     try {
@@ -126,18 +126,18 @@ function User-Auditing {
         Write-Host "Failed to disable or rename Administrator account: $_"
     }
 
-    $localUsers = Get-LocalUser
-       foreach ($user in $localUsers) {
-        try {
-            # Ensure password expires
-            Set-LocalUser -Name $user.Name -PasswordNeverExpires $false
-            # Ensure user can change password
-            Set-LocalUser -Name $user.Name -UserMayChangePassword $true
-            Write-Host "User '$($user.Name)' set: Password expires, user may change password."
-        } catch {
-            Write-Host "Failed to update '$($user.Name)': $_"
-        }
+   $localUsers = Get-LocalUser
+foreach ($user in $localUsers) {
+    try {
+        # Ensure password expires
+        Set-LocalUser -Name $user.Name -PasswordNeverExpires $false
+        # Ensure user can change password
+        Set-LocalUser -Name $user.Name -UserMayChangePassword $true
+    } catch {
+        Write-Host "Failed to update '$($user.Name)': $_"
     }
+}
+Write-Host "All users set: Password expires, User may change password."
     
     Write-Host "`n--- User Auditing Complete ---`n"
 }

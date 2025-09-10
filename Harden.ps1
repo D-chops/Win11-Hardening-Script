@@ -109,6 +109,19 @@ function User-Auditing {
         }
     }
 
+    $localUsers = Get-LocalUser
+       foreach ($user in $localUsers) {
+        try {
+            # Ensure password expires
+            Set-LocalUser -Name $user.Name -PasswordNeverExpires $false
+            # Ensure user can change password
+            Set-LocalUser -Name $user.Name -UserMayChangePassword $true
+            Write-Host "User '$($user.Name)' set: Password expires, user may change password."
+        } catch {
+            Write-Host "Failed to update '$($user.Name)': $_"
+        }
+    }
+    
     Write-Host "`n--- User Auditing Complete ---`n"
 }
 function Admin-Auditing {

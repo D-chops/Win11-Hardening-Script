@@ -77,8 +77,7 @@ function Review-GroupMembers {
         [string]$GroupName
     )
 
-    Write-Host "`nReviewing members of group: " -NoNewline
-    Write-Host "$GroupName" -ForegroundColor $ColorName
+    Write-Host "`n=== Auditing group: $GroupName ===" -ForegroundColor $ColorHeader
 
     try {
         $members = Get-LocalGroupMember -Group $GroupName -ErrorAction Stop
@@ -92,7 +91,7 @@ function Review-GroupMembers {
         Write-Host "$($member.Name)" -ForegroundColor $ColorName -NoNewline
         Write-Host " authorized to be in " -NoNewline
         Write-Host "$GroupName" -ForegroundColor $ColorName -NoNewline
-        Write-Host "? [Y/n] (default Y)" -ForegroundColor $ColorPrompt -NoNewline
+        Write-Host "? [Y/n] (default Y) " -ForegroundColor $ColorPrompt -NoNewline
         $response = Read-Host
 
         if ($response -match '^[Nn]') {
@@ -189,6 +188,9 @@ Write-Host "Passwords for all users set to temporary value and will require chan
 function Admin-Auditing {
     Write-Host "`n--- Starting: Admin Auditing ---`n"
     Review-GroupMembers -GroupName 'Administrators'
+    Review-GroupMembers -GroupName 'Backup Operators'
+    Review-GroupMembers -GroupName 'Remote Management Users'
+    Review-GroupMembers -GroupName 'Event Log Readers'
 
     # Loop through all users with Administrator permissions
 $adminGroup = Get-LocalGroupMember -Group 'Administrators'
@@ -228,7 +230,29 @@ function uncategorized-OS-Settings {
 }
 function service-Auditing {
     Write-Host "`n--- Starting: Service Auditing ---`n"
-}
+        # Array of services to disable for security
+    $ServicesToDisable = @(
+        'RemoteRegistry',
+        'Spooler',
+        'Telnet',
+        'SNMP',
+        'Browser'
+                foreach ($svc in $ServicesToDisable) {
+            try {
+                $service = Get-Service -Name $svc -ErrorAction Stop
+                if ($service.Status -eq 'Running') {
+                    Stop-Service -Name $svc -Force
+                    Write-Host "Service '$svc' stopped."
+                } else {
+                    Write-Host "Service '$svc' is not running."
+                }
+                Set-Service -Name $svc -StartupType Disabled
+                Write-Host "Service '$svc' startup type set to Disabled."
+            } catch {
+                Write-Host "Service '$svc' not found or error occurred: $_"
+            }
+        } 
+    }
 function os-Updates {
     Write-Host "`n--- Starting: OS Updates ---`n"
 }

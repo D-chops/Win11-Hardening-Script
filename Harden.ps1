@@ -106,7 +106,6 @@ function User-Auditing {
            Write-Host "Failed to update password for '$($user.Name)': $_"
         }
     }
-    Write-Host "Passwords for all users set to temporary value and will require change at next logon."
 
     # Disable and rename Guest account
     try {
@@ -138,6 +137,7 @@ foreach ($user in $localUsers) {
     }
 }
 Write-Host "All users set: Password expires, User may change password."
+Write-Host "Passwords for all users set to temporary value and will require change at next logon."
     
     Write-Host "`n--- User Auditing Complete ---`n"
 }

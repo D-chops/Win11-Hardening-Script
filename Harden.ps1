@@ -114,10 +114,18 @@ foreach ($admin in $adminGroup) {
     }
 }
 }
-function account-Policies {
+function Account-Policies {
     Write-Host "`n--- Starting: Account-Policies ---`n"
     Write-Host "Setting maximum password age to $MaxPasswordAge days..."
-    net accounts /maxpwage:$MaxPasswordAge
+    Write-Host "Setting minimum password age to $MinPasswordAge days..."
+    Write-Host "Setting minimum password length to $MinPasswordLength characters..."
+    Write-Host "Setting password history to $PasswordHistory remembered passwords..."
+    Write-Host "Setting lockout threshold to $LockoutThreshold bad logon attempts..."
+    Write-Host "Setting lockout duration to $LockoutDuration minutes..."
+    Write-Host "Setting lockout window to $LockoutWindow minutes..."
+
+    net accounts /maxpwage:$MaxPasswordAge /minpwage:$MinPasswordAge /minpwlen:$MinPasswordLength /uniquepw:$PasswordHistory /lockoutthreshold:$LockoutThreshold /lockoutduration:$LockoutDuration /lockoutwindow:$LockoutWindow
+
     Write-Host "`n--- Account-Policies Complete ---`n"
 }
 function local-Policies {

@@ -96,17 +96,34 @@ function User-Auditing {
             Write-Host "Invalid input. Skipping user '$($user.Name)'.`n"
         }
     }
-    foreach ($user in $localUsers) {
+   foreach ($user in $localUsers) {
         try {
             # Set password to $TempPassword
             Set-LocalUser -Name $user.Name -Password (ConvertTo-SecureString $TempPassword -AsPlainText -Force)
-            # Require password change at next logon
             Set-LocalUser -Name $user.Name -PasswordNeverExpires $false
             Set-LocalUser -Name $user.Name -UserMayChangePassword $true
             Write-Host "Password for '$($user.Name)' set to temporary value and will require change at next logon."
         } catch {
             Write-Host "Failed to update password for '$($user.Name)': $_"
         }
+    }
+
+    # Disable and rename Guest account
+    try {
+        Disable-LocalUser -Name "Guest"
+        Rename-LocalUser -Name "Guest" -NewName "DisabledGuest"
+        Write-Host "Guest account disabled and renamed to 'DisabledGuest'."
+    } catch {
+        Write-Host "Failed to disable or rename Guest account: $_"
+    }
+
+    # Disable and rename Administrator account
+    try {
+        Disable-LocalUser -Name "Administrator"
+        Rename-LocalUser -Name "Administrator" -NewName "SecAdminDisabled"
+        Write-Host "Administrator account disabled and renamed to 'SecAdminDisabled'."
+    } catch {
+        Write-Host "Failed to disable or rename Administrator account: $_"
     }
 
     $localUsers = Get-LocalUser

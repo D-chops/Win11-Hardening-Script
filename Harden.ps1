@@ -2,11 +2,16 @@
 # Variables Section - Start
 # =========================
 
-$MaxPasswordAge = 60
+$MaxPasswordAge    = 60   # maximum days before a password must be changed
+$MinPasswordAge    = 10   # minimum days a password must be used
+$MinPasswordLength = 10   # minimum length of passwords
+$PasswordHistory   = 20   # number of previous passwords remembered
+$LockoutThreshold  = 5    # bad logon attempts before lockout
+$LockoutDuration   = 10   # minutes an account remains locked
+$LockoutWindow     = 10   # minutes in which bad logons are counted
 
 # =======================
 # Variables Section - End
-# =======================
 
 # Self-elevate to run as Administrator
 if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")) {

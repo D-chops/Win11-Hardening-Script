@@ -79,6 +79,28 @@ if (-not (Test-Path -Path $folderPath)) {
 $PUSER = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name.Split('\')[-1]
 $DOCS = "C:\Users\$PUSER\Desktop\DOCS"
 Get-LocalUser | Out-File -FilePath "$DOCS\LocalUsers.txt"
+# Save list of administrators
+Get-LocalGroupMember -Group 'Administrators' | Out-File -FilePath "$DOCS\administrators.txt"
+
+# Save list of installed programs
+Get-ItemProperty HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\* |
+    Select-Object DisplayName, DisplayVersion, Publisher, InstallDate |
+    Out-File -FilePath "$DOCS\programs.txt"
+
+# Save list of running services
+Get-Service | Where-Object {$_.Status -eq 'Running'} | Out-File -FilePath "$DOCS\services.txt"
+
+# Save list of installed features
+Get-WindowsFeature | Where-Object {$_.Installed} | Out-File -FilePath "$DOCS\features.txt"
+
+# Export security configuration
+secedit /export /cfg "$DOCS\secedit-export.inf"
+
+# Save Windows Defender preferences
+Get-MpPreference | Out-File -FilePath "$DOCS\defender.txt"
+
+# Save list of scheduled tasks
+Get-ScheduledTask | Out-File -FilePath "$DOCS\scheduled-tasks.txt"
 }
 function Enable-Updates {
     Write-Host "`n--- Starting: Enable updates ---`n"

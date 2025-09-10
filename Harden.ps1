@@ -29,6 +29,7 @@ $menuOptions = @(
     "Malware",
     "Application Security Settings",
     "exit"
+)
 function Document-System {
     Write-Host "`n--- Starting: Document the system ---`n"
 }

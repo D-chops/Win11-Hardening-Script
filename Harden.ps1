@@ -10,15 +10,25 @@ Write-Host "Computer Name: $env:COMPUTERNAME"
 # Display the Windows version
 Write-Host "Windows Version:"
 Get-ComputerInfo | Select-Object -Property WindowsProductName, WindowsVersion, OsHardwareAbstractionLayer
+
 # Define menu options
 $menuOptions = @(
     "document the system",
     "enable updates",
     "user auditing",
-    "Admin Auditing"
+    "Admin Auditing",
+    "Account-Policies",
+    "Local Policies",
+    "Defensive Countermeasures",
+    "Uncategorized OS Settings",
+    "Service Auditing",
+    "OS Updates",
+    "Application Updates",
+    "Prohibited Files",
+    "Unwanted Software",
+    "Malware",
+    "Application Security Settings",
     "exit"
-    )
-    # Define functions for each option
 function Document-System {
     Write-Host "`n--- Starting: Document the system ---`n"
 }
@@ -88,6 +98,40 @@ foreach ($admin in $adminGroup) {
     }
 }
 }
+function account-Policies {
+    Write-Host "`n--- Starting: Account-Policies ---`n"
+}
+function local-Policies {
+    Write-Host "`n--- Starting: Local Policies ---`n"
+}
+function defensive-Countermeasures {
+    Write-Host "`n--- Starting: Defensive Countermeasures ---`n"
+}
+function uncategorized-OS-Settings {
+    Write-Host "`n--- Starting: Uncategorized OS Settings ---`n"
+}
+function service-Auditing {
+    Write-Host "`n--- Starting: Service Auditing ---`n"
+}
+function os-Updates {
+    Write-Host "`n--- Starting: OS Updates ---`n"
+}
+function application-Updates {
+    Write-Host "`n--- Starting: Application Updates ---`n"
+}
+function prohibited-Files {
+    Write-Host "`n--- Starting: Prohibited Files ---`n"
+}
+function unwanted-Software {
+    Write-Host "`n--- Starting: Unwanted Software ---`n"
+}
+function malware {
+    Write-Host "`n--- Starting: Malware ---`n"
+}
+function application-Security-Settings {
+    Write-Host "`n--- Starting: Application Security Settings ---`n"
+}
+
 # Menu loop
 :menu do {
     Write-Host "`nSelect an option:`n"
@@ -102,7 +146,18 @@ foreach ($admin in $adminGroup) {
         "2" { Enable-Updates }
         "3" { User-Auditing }
         "4" { Admin-Auditing }
-        "5" { Write-Host "`nExiting..."; break menu }  # leave the do{} loop
+        "5" {account-Policies }
+        "6" {local-Policies }
+        "7" {defensive-Countermeasures }
+        "8" {uncategorized-OS-Settings }
+        "9" {service-Auditing }
+        "10" {os-Updates }
+        "11" {application-Updates }
+        "12" {prohibited-Files }
+        "13" {unwanted-Software }
+        "14" {malware }
+        "15" {application-Security-Settings }
+        "16" { Write-Host "`nExiting..."; break menu }  # leave the do{} loop
         default { Write-Host "`nInvalid selection. Please try again." }
     }
 } while ($true)

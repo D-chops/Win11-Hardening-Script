@@ -9,6 +9,7 @@ $PasswordHistory   = 20   # number of previous passwords remembered
 $LockoutThreshold  = 5    # bad logon attempts before lockout
 $LockoutDuration   = 10   # minutes an account remains locked
 $LockoutWindow     = 10   # minutes in which bad logons are counted
+$TempPassword      = '1CyberPatriot!' # temporary password for new or reset accounts
 
 # =======================
 # Variables Section - End
@@ -68,6 +69,19 @@ function User-Auditing {
 
         # Loop through every local user account and prompt for authorization
     $localUsers = Get-LocalUser
+    
+    foreach ($user in $localUsers) {
+        try {
+            # Set password to $TempPassword
+            Set-LocalUser -Name $user.Name -Password (ConvertTo-SecureString $TempPassword -AsPlainText -Force)
+            # Require password change at next logon
+            Set-LocalUser -Name $user.Name -PasswordNeverExpires $false
+            Set-LocalUser -Name $user.Name -UserMayChangePassword $true
+            Write-Host "Password for '$($user.Name)' set to temporary value and will require change at next logon."
+        } catch {
+            Write-Host "Failed to update password for '$($user.Name)': $_"
+        }
+    }
     
     foreach ($user in $localUsers) {
         # Skip system/built-in/current accounts

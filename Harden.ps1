@@ -294,7 +294,6 @@ function local-Policies {
         Write-Host "Verification lines:"
         Select-String -Path ".\verify.inf" -Pattern '^SeTakeOwnershipPrivilege|^SeTrustedCredManAccessPrivilege|^SeDenyNetworkLogonRight|^SeCreateTokenPrivilege|^SeCreateGlobalPrivilege|^SeRemoteShutdownPrivilege|^SeLoadDriverPrivilege|^SeSecurityPrivilege'
       }
-    }
         function defensive-Countermeasures {
     Write-Host "`n--- Starting: Defensive Countermeasures ---`n"
 }

@@ -956,7 +956,6 @@ function application-Security-Settings {
                 }
             }
             "ie" {
-                # IE default browser has no command-line set, manual
                 Write-Host "To set IE as default browser, please configure via Settings manually." -ForegroundColor Yellow
                 $defaultBrowser = "ie"
             }
@@ -1010,11 +1009,7 @@ function application-Security-Settings {
 
                 "firefox" {
                     $profilePath = "$env:APPDATA\Mozilla\Firefox\Profiles"
-                    $profile = $null
-                    if (Test-Path $profilePath) {
-                        $profile = Get-ChildItem $profilePath -Directory | Select-Object -First 1
-                    }
-
+                    $profile = Get-ChildItem $profilePath -Directory -ErrorAction SilentlyContinue | Select-Object -First 1
                     if ($profile) {
                         $userJsPath = Join-Path $profile.FullName "user.js"
                         $prefs = @(
@@ -1046,36 +1041,34 @@ function application-Security-Settings {
                 }
 
                 "ie" {
-                    # Try to uninstall Internet Explorer feature using multiple known feature names
-                    $ieFeatureNames = @(
-                        "Internet-Explorer-Optional-amd64",
-                        "Internet-Explorer-Optional",
-                        "Internet-Explorer-Optional-x86"
-                    )
+                    # Dynamically get IE-related features and disable them
+                    $ieFeatures = Get-WindowsOptionalFeature -Online | Where-Object FeatureName -like "*InternetExplorer*"
 
-                    $ieFeatureUninstalled = $false
-
-                    foreach ($featureName in $ieFeatureNames) {
-                        $feature = Get-WindowsOptionalFeature -Online -FeatureName $featureName -ErrorAction SilentlyContinue
-                        if ($feature -and $feature.State -eq "Enabled") {
-                            Write-Host "Disabling Internet Explorer feature: $featureName ..."
-                            Disable-WindowsOptionalFeature -Online -FeatureName $featureName -NoRestart -ErrorAction SilentlyContinue
-                            $ieFeatureUninstalled = $true
+                    if ($ieFeatures) {
+                        $ieFeatureUninstalled = $false
+                        foreach ($feature in $ieFeatures) {
+                            if ($feature.State -eq "Enabled") {
+                                Write-Host "Disabling Internet Explorer feature: $($feature.FeatureName) ..."
+                                Disable-WindowsOptionalFeature -Online -FeatureName $feature.FeatureName -NoRestart -ErrorAction SilentlyContinue
+                                $ieFeatureUninstalled = $true
+                            }
                         }
+                        if ($ieFeatureUninstalled) {
+                            Write-Host "Internet Explorer feature(s) disabled. Please restart your system to complete the uninstall."
+                        } else {
+                            Write-Host "Internet Explorer feature already disabled."
+                        }
+                    } else {
+                        Write-Host "No Internet Explorer features found."
                     }
 
-                    if ($ieFeatureUninstalled) {
-                        Write-Host "Internet Explorer feature(s) disabled. Please restart your system to complete the uninstall."
-                    } else {
-                        Write-Host "Internet Explorer feature already disabled or not found via Windows Optional Features."
-                        # Try uninstalling IE package via DISM as fallback
-                        $dismOutput = dism.exe /online /Remove-Package /PackageName:Microsoft-Windows-InternetExplorer-Package~31bf3856ad364e35~amd64~~10.0.19041.1 /NoRestart 2>&1
+                    # Try uninstalling IE package via DISM as fallback
+                    $dismOutput = dism.exe /online /Remove-Package /PackageName:Microsoft-Windows-InternetExplorer-Package~31bf3856ad364e35~amd64~~10.0.19041.1 /NoRestart 2>&1
 
-                        if ($dismOutput -match "The operation completed successfully") {
-                            Write-Host "Successfully uninstalled Internet Explorer package via DISM. Please restart your system."
-                        } else {
-                            Write-Host "DISM uninstall of IE package failed or package not found. You may need to uninstall IE manually." -ForegroundColor Yellow
-                        }
+                    if ($dismOutput -match "The operation completed successfully") {
+                        Write-Host "Successfully uninstalled Internet Explorer package via DISM. Please restart your system."
+                    } else {
+                        Write-Host "DISM uninstall of IE package failed or package not found. You may need to uninstall IE manually." -ForegroundColor Yellow
                     }
 
                     # Rename iexplore.exe to disable launching
@@ -1100,7 +1093,6 @@ function application-Security-Settings {
 
     Write-Host "`n--- Application Security Settings Complete ---`n"
 }
-
 
 # Menu loop
 :menu do {

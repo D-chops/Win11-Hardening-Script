@@ -103,41 +103,7 @@ Get-ScheduledTask | Out-File -FilePath "$DOCS\scheduled-tasks.txt"
 }
 function Enable-Updates {
     Write-Host "`n--- Starting: Enable updates ---`n"
-
-    $keywords = @("username", "user:", "password", "pass:", "login")
-    $usersPath = "C:\Users"
-    $foundMatch = $false
-
-    Get-ChildItem -Path $usersPath -Directory | ForEach-Object {
-        $docsPath = Join-Path $_.FullName "Documents"
-        if (Test-Path $docsPath) {
-            Get-ChildItem -Path $docsPath -Recurse -Filter *.txt -ErrorAction SilentlyContinue | ForEach-Object {
-                $filePath = $_.FullName
-                Write-Host "Checking file: $filePath"
-
-                try {
-                    $content = Get-Content $filePath -ErrorAction Stop | Out-String
-                    foreach ($keyword in $keywords) {
-                        if ($content.ToLower().Contains($keyword)) {
-                            Write-Host "`n[+] Found potential sensitive file: $filePath`n"
-                            $foundMatch = $true
-                            break
-                        }
-                    }
-                } catch {
-                    Write-Host "[!] Could not read file: $filePath"
-                }
-            }
-        }
-    }
-
-    if (-not $foundMatch) {
-        Write-Host "`n[-] No sensitive files found.`n"
-    }
-
-    Write-Host "--- Finished: Enable updates ---`n"
 }
-
 function Review-GroupMembers {
     param (
         [Parameter(Mandatory=$true)]
@@ -298,46 +264,69 @@ function Account-Policies {
     Write-Host "`n--- Account-Policies Complete ---`n"
 }
 function local-Policies {
-     Write-Host "`n--- Exporting and Hardening User Rights Assignments ---`n"
-    
-        # Paths
-        $secpolInf = ".\secpol.inf"
-        $backupInf = ".\secpol-backup.inf"
-        $localSdb  = "C:\Windows\Security\local.sdb"
-    
-        # Backup current local security database
-        Copy-Item -Path $localSdb -Destination $backupInf -ErrorAction SilentlyContinue
-        Write-Host "Backup of local security database saved to $backupInf"
-    
-        # Export current security policy to INF
-        secedit /export /cfg $secpolInf
-    
-        # Harden user rights assignments
-        $content = Get-Content $secpolInf
-    
-        $content = $content `
-            -replace '^.*SeTakeOwnershipPrivilege.*$',         'SeTakeOwnershipPrivilege = *S-1-5-32-544' `
-            -replace '^.*SeTrustedCredManAccessPrivilege.*$',  'SeTrustedCredManAccessPrivilege = *S-1-5-32-544' `
-            -replace '^.*SeDenyNetworkLogonRight.*$',          'SeDenyNetworkLogonRight = *S-1-1-0,*S-1-5-32-546' `
-            -replace '^.*SeCreateTokenPrivilege.*$',           'SeCreateTokenPrivilege = *S-1-5-32-544' `
-            -replace '^.*SeCreateGlobalPrivilege.*$',          'SeCreateGlobalPrivilege = *S-1-5-32-544' `
-            -replace '^.*SeRemoteShutdownPrivilege.*$',        'SeRemoteShutdownPrivilege = *S-1-5-32-544' `
-            -replace '^.*SeLoadDriverPrivilege.*$',            'SeLoadDriverPrivilege = *S-1-5-32-544' `
-            -replace '^.*SeSecurityPrivilege.*$',              'SeSecurityPrivilege = *S-1-5-32-544'
-    
-        Set-Content -Path $secpolInf -Value $content
-        Write-Host "User rights assignments updated in $secpolInf"
-    
-        # Import the modified policy and overwrite the database
-        echo y | secedit /configure /db $localSdb /cfg $secpolInf /overwrite
-    
-        Write-Host "`n--- User Rights Hardening Complete ---`n"
-    
-        # Optional: Verify changes
-        secedit /export /cfg ".\verify.inf"
-        Write-Host "Verification lines:"
-        Select-String -Path ".\verify.inf" -Pattern '^SeTakeOwnershipPrivilege|^SeTrustedCredManAccessPrivilege|^SeDenyNetworkLogonRight|^SeCreateTokenPrivilege|^SeCreateGlobalPrivilege|^SeRemoteShutdownPrivilege|^SeLoadDriverPrivilege|^SeSecurityPrivilege'
-      }
+    Write-Host "`n--- Exporting and Hardening User Rights Assignments ---`n"
+
+    # Paths
+    $secpolInf = ".\secpol.inf"
+    $backupInf = ".\secpol-backup.inf"
+    $localSdb  = "C:\Windows\Security\local.sdb"
+
+    # Backup current local security database
+    Copy-Item -Path $localSdb -Destination $backupInf -ErrorAction SilentlyContinue
+    Write-Host "Backup of local security database saved to $backupInf"
+
+    # Export current security policy to INF
+    secedit /export /cfg $secpolInf
+
+    # Load file content
+    $content = Get-Content $secpolInf
+
+    # -------------------------
+    # 1. Harden User Rights Assignments
+    # -------------------------
+    $content = $content `
+        -replace '^.*SeTakeOwnershipPrivilege.*$',         'SeTakeOwnershipPrivilege = *S-1-5-32-544' `
+        -replace '^.*SeTrustedCredManAccessPrivilege.*$',  'SeTrustedCredManAccessPrivilege = *S-1-5-32-544' `
+        -replace '^.*SeDenyNetworkLogonRight.*$',          'SeDenyNetworkLogonRight = *S-1-1-0,*S-1-5-32-546' `
+        -replace '^.*SeCreateTokenPrivilege.*$',           'SeCreateTokenPrivilege = *S-1-5-32-544' `
+        -replace '^.*SeCreateGlobalPrivilege.*$',          'SeCreateGlobalPrivilege = *S-1-5-32-544' `
+        -replace '^.*SeRemoteShutdownPrivilege.*$',        'SeRemoteShutdownPrivilege = *S-1-5-32-544' `
+        -replace '^.*SeLoadDriverPrivilege.*$',            'SeLoadDriverPrivilege = *S-1-5-32-544' `
+        -replace '^.*SeSecurityPrivilege.*$',              'SeSecurityPrivilege = *S-1-5-32-544'
+
+    # -------------------------
+    # 2. Add Audit Policy: Audit Logon [Failure]
+    # -------------------------
+    if ($content -notmatch 'AuditLogonEvents') {
+        $content += "`nAuditLogonEvents = 0 1"  # 0 = Success, 1 = Failure
+    } else {
+        $content = $content -replace '^AuditLogonEvents.*$', 'AuditLogonEvents = 0 1'
+    }
+
+    # -------------------------
+    # 3. Enable CTRL+ALT+DEL Requirement
+    # -------------------------
+    if ($content -notmatch 'DisableCAD') {
+        $content += "`nDisableCAD = 0"  # 0 = Enabled (CTRL+ALT+DEL required)
+    } else {
+        $content = $content -replace '^DisableCAD.*$', 'DisableCAD = 0'
+    }
+
+    # Save updated content
+    Set-Content -Path $secpolInf -Value $content
+    Write-Host "Security settings updated in $secpolInf"
+
+    # Import the modified policy and overwrite the database
+    echo y | secedit /configure /db $localSdb /cfg $secpolInf /overwrite
+
+    Write-Host "`n--- User Rights and Local Policies Hardening Complete ---`n"
+
+    # Optional: Verify changes
+    secedit /export /cfg ".\verify.inf"
+    Write-Host "Verification lines:"
+    Select-String -Path ".\verify.inf" -Pattern '^SeTakeOwnershipPrivilege|^AuditLogonEvents|^DisableCAD'
+}
+
       function defensive-Countermeasures {
     Write-Host "`n--- Starting: Defensive Countermeasures ---`n"
 

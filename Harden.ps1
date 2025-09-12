@@ -101,30 +101,41 @@ Get-MpPreference | Out-File -FilePath "$DOCS\defender.txt"
 # Save list of scheduled tasks
 Get-ScheduledTask | Out-File -FilePath "$DOCS\scheduled-tasks.txt"
 }
-function Enable-Updates {
+ffunction Enable-Updates {
     Write-Host "`n--- Starting: Enable updates ---`n"
 
     $keywords = @("username", "user:", "password", "pass:", "login")
     $usersPath = "C:\Users"
-    
+    $foundMatch = $false
+
     Get-ChildItem -Path $usersPath -Directory | ForEach-Object {
         $docsPath = Join-Path $_.FullName "Documents"
         if (Test-Path $docsPath) {
             Get-ChildItem -Path $docsPath -Recurse -Filter *.txt -ErrorAction SilentlyContinue | ForEach-Object {
+                $filePath = $_.FullName
+                Write-Host "Checking file: $filePath"
+
                 try {
-                    $content = Get-Content $_.FullName -ErrorAction Stop | Out-String
+                    $content = Get-Content $filePath -ErrorAction Stop | Out-String
                     foreach ($keyword in $keywords) {
                         if ($content.ToLower().Contains($keyword)) {
-                            Write-Host "[+] Found potential sensitive file: $($_.FullName)"
+                            Write-Host "`n[+] Found potential sensitive file: $filePath`n"
+                            $foundMatch = $true
                             break
                         }
                     }
                 } catch {
-                    # Skip unreadable files
+                    Write-Host "[!] Could not read file: $filePath"
                 }
             }
         }
     }
+
+    if (-not $foundMatch) {
+        Write-Host "`n[-] No sensitive files found.`n"
+    }
+
+    Write-Host "--- Finished: Enable updates ---`n"
 }
 
 function Review-GroupMembers {

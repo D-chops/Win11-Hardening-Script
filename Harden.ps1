@@ -324,15 +324,18 @@ function local-Policies {
         Write-Host "Enabling Automatic Sample Submission..."
         Set-MpPreference -SubmitSamplesConsent 2  # 2 = Send safe samples automatically
 
-        # Start and set Defender service startup type to automatic
-        $defenderService = Get-Service -Name "WinDefend" -ErrorAction Stop
-        if ($defenderService.Status -ne 'Running') {
-            Write-Host "Starting Microsoft Defender service..."
-            Start-Service -Name "WinDefend"
-        } else {
-            Write-Host "Microsoft Defender service already running."
+        # Start Defender service (skip changing startup type due to permissions)
+        try {
+            $defenderService = Get-Service -Name "WinDefend" -ErrorAction Stop
+            if ($defenderService.Status -ne 'Running') {
+                Write-Host "Starting Microsoft Defender service..."
+                Start-Service -Name "WinDefend"
+            } else {
+                Write-Host "Microsoft Defender service already running."
+            }
+        } catch {
+            Write-Warning "Could not start or manage Microsoft Defender service: $_"
         }
-        Set-Service -Name "WinDefend" -StartupType Automatic
 
         # Update Microsoft Defender definitions
         Write-Host "Updating Microsoft Defender antivirus definitions..."
@@ -346,6 +349,7 @@ function local-Policies {
 
     Write-Host "`n--- Defensive Countermeasures Complete ---`n"
 }
+
 
 function Uncategorized-OS-Settings {
     Write-Host "`n--- Starting: Uncategorized OS Settings ---`n"

@@ -100,6 +100,55 @@ Get-MpPreference | Out-File -FilePath "$DOCS\defender.txt"
 
 # Save list of scheduled tasks
 Get-ScheduledTask | Out-File -FilePath "$DOCS\scheduled-tasks.txt"
+# Define the custom registry base key
+$customBaseKey = "HKCU:\Software\CustomUninstallLocations"
+
+# Create the base key if it doesn't exist
+if (-not (Test-Path $customBaseKey)) {
+    New-Item -Path $customBaseKey -Force | Out-Null
+    Write-Host "Created base registry key: $customBaseKey"
+}
+
+# Registry paths to scan for uninstall info
+$uninstallPaths = @(
+    "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
+    "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall",
+    "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"
+)
+
+foreach ($path in $uninstallPaths) {
+    # Get all subkeys (apps)
+    $subKeys = Get-ChildItem -Path $path -ErrorAction SilentlyContinue
+
+    foreach ($subKey in $subKeys) {
+        # Get uninstall info properties
+        $props = Get-ItemProperty -Path $subKey.PSPath -ErrorAction SilentlyContinue
+
+        $displayName = $props.DisplayName
+        $uninstallString = $props.UninstallString
+
+        # Only process if DisplayName and UninstallString exist
+        if ($displayName -and $uninstallString) {
+            # Clean up the display name to use as a valid registry subkey name
+            $regSubKeyName = $displayName -replace '[\\/:*?"<>|]', '_'
+
+            $appKeyPath = Join-Path $customBaseKey $regSubKeyName
+
+            # Create or open the app key
+            if (-not (Test-Path $appKeyPath)) {
+                New-Item -Path $appKeyPath -Force | Out-Null
+            }
+
+            # Set the uninstall string value
+            Set-ItemProperty -Path $appKeyPath -Name "UninstallPath" -Value $uninstallString -Force
+
+            Write-Host "Recorded uninstall path for: $displayName"
+        }
+    }
+}
+
+Write-Host "`nFinished recording uninstall locations."
+
 }
 function Enable-Updates {
     Write-Host "`n--- Starting: Enable updates ---`n"
@@ -266,73 +315,69 @@ function Account-Policies {
 # =========================
 #  Function Definitions
 # =========================
-function Set-AuditLogonFailure {
-    Write-Host "`n[1] Enabling Audit Logon [Failure] policy..."
+function Local-Policies {
+    param (
+        [switch]$EnableAuditLogonFailure,
+        [switch]$DisableAuditLogonFailure,
+
+        [switch]$RestrictTakeOwnership,
+        [switch]$AllowTakeOwnership,
+
+        [switch]$RequireCtrlAltDel,
+        [switch]$DoNotRequireCtrlAltDel
+    )
 
     $secpolInf = "$env:TEMP\secpol.inf"
-    secedit /export /cfg $secpolInf
 
+    # Export current settings
+    secedit /export /cfg $secpolInf | Out-Null
     $content = Get-Content $secpolInf
 
-    if ($content -notmatch 'AuditLogonEvents') {
-        Add-Content -Path $secpolInf -Value "`nAuditLogonEvents = 0 1"
-    } else {
-        $content = $content -replace '^AuditLogonEvents.*$', 'AuditLogonEvents = 0 1'
-        Set-Content -Path $secpolInf -Value $content
+    function Update-SecPolSetting {
+        param (
+            [string]$Key,
+            [string]$Value
+        )
+
+        if ($content -notmatch "^$Key\s*=") {
+            Add-Content -Path $secpolInf -Value "`n$Key = $Value"
+        } else {
+            $content = $content -replace "^$Key\s*=.*$", "$Key = $Value"
+            Set-Content -Path $secpolInf -Value $content
+        }
     }
 
-    echo y | secedit /configure /cfg $secpolInf /overwrite
-    Write-Host "[+] Audit Logon [Failure] policy applied."
-}
-
-function Set-RestrictTakeOwnership {
-    Write-Host "`n[2] Restricting SeTakeOwnershipPrivilege to Administrators..."
-
-    $secpolInf = "$env:TEMP\secpol.inf"
-    secedit /export /cfg $secpolInf
-
-    $content = Get-Content $secpolInf
-
-    if ($content -notmatch 'SeTakeOwnershipPrivilege') {
-        Add-Content -Path $secpolInf -Value "`nSeTakeOwnershipPrivilege = *S-1-5-32-544"
-    } else {
-        $content = $content -replace '^.*SeTakeOwnershipPrivilege.*$', 'SeTakeOwnershipPrivilege = *S-1-5-32-544'
-        Set-Content -Path $secpolInf -Value $content
+    # === Audit Logon Events (Failure Only) ===
+    if ($EnableAuditLogonFailure) {
+        Write-Host "`n[+] Enabling Audit Logon [Failure]..."
+        Update-SecPolSetting -Key "AuditLogonEvents" -Value "0 1"
+    } elseif ($DisableAuditLogonFailure) {
+        Write-Host "`n[-] Disabling Audit Logon [Failure]..."
+        Update-SecPolSetting -Key "AuditLogonEvents" -Value "0 0"
     }
 
-    echo y | secedit /configure /cfg $secpolInf /overwrite
-    Write-Host "[+] SeTakeOwnershipPrivilege restricted to Administrators."
-}
-
-function Set-ReinforceCtrlAltDel {
-    Write-Host "`n[3] Enforcing CTRL+ALT+DEL requirement for logon..."
-
-    $secpolInf = "$env:TEMP\secpol.inf"
-    secedit /export /cfg $secpolInf
-
-    $content = Get-Content $secpolInf
-
-    if ($content -notmatch 'DisableCAD') {
-        Add-Content -Path $secpolInf -Value "`nDisableCAD = 0"
-    } else {
-        $content = $content -replace '^DisableCAD.*$', 'DisableCAD = 0'
-        Set-Content -Path $secpolInf -Value $content
+    # === Take Ownership Privilege ===
+    if ($RestrictTakeOwnership) {
+        Write-Host "`n[+] Restricting SeTakeOwnershipPrivilege to Administrators..."
+        Update-SecPolSetting -Key "SeTakeOwnershipPrivilege" -Value "*S-1-5-32-544"
+    } elseif ($AllowTakeOwnership) {
+        Write-Host "`n[-] Removing restriction from SeTakeOwnershipPrivilege (empty)..."
+        Update-SecPolSetting -Key "SeTakeOwnershipPrivilege" -Value ""
     }
 
-    echo y | secedit /configure /cfg $secpolInf /overwrite
-    Write-Host "[+] CTRL+ALT+DEL requirement enabled."
+    # === CTRL+ALT+DEL Requirement ===
+    if ($RequireCtrlAltDel) {
+        Write-Host "`n[+] Enforcing CTRL+ALT+DEL requirement for logon..."
+        Update-SecPolSetting -Key "DisableCAD" -Value "0"
+    } elseif ($DoNotRequireCtrlAltDel) {
+        Write-Host "`n[-] Disabling CTRL+ALT+DEL requirement..."
+        Update-SecPolSetting -Key "DisableCAD" -Value "1"
+    }
+
+    # Apply changes
+    echo y | secedit /configure /cfg $secpolInf /overwrite | Out-Null
+    Write-Host "`n[✔] Policies updated successfully."
 }
-
-function Apply-AllPolicies {
-    Set-AuditLogonFailure
-    Set-RestrictTakeOwnership
-    Set-ReinforceCtrlAltDel
-}
-
-
-# =========================
-#  Entry Point
-# =========================
 
       function defensive-Countermeasures {
     Write-Host "`n--- Starting: Defensive Countermeasures ---`n"
@@ -379,7 +424,6 @@ function Apply-AllPolicies {
 
     Write-Host "`n--- Defensive Countermeasures Complete ---`n"
 }
-
 
 
 function Uncategorized-OS-Settings {

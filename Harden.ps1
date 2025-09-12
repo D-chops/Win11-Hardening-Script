@@ -221,23 +221,21 @@ function User-Auditing {
         try {
             # Ensure password expires
             Set-LocalUser -Name $user.Name -PasswordNeverExpires $false
-            # Ensure user can change password
-            Set-LocalUser -Name $user.Name -UserMayChangePassword $true
-        } catch {
-            Write-Host "Failed to update '$($user.Name)': $_"
-        }
+            # Ensure user can change password.
         if ($addUserResponse -match "^[Yy]$") {
-    $newUserName = Read-Host "Enter the new username"
-    $newUserPassword = Read-Host "Enter the password for '$newUserName'"
-    try {
-        New-LocalUser -Name $newUserName -Password (ConvertTo-SecureString $newUserPassword -AsPlainText -Force)
-        # Set properties after creation
-        Set-LocalUser -Name $newUserName -UserMayChangePassword $true
-        Set-LocalUser -Name $newUserName -PasswordNeverExpires $false
-        Write-Host "User '$newUserName' created successfully."
-    } catch {
-        Write-Host "Failed to create user '$newUserName': $_"
-    }
+            $newUserName = Read-Host "Enter the new username"
+            $newUserPassword = Read-Host "Enter the password for '$newUserName'"
+            try {
+                New-LocalUser -Name $newUserName -Password (ConvertTo-SecureString $newUserPassword -AsPlainText -Force)
+                # Set properties after creation
+                Set-LocalUser -Name $newUserName -UserMayChangePassword $true
+                Set-LocalUser -Name $newUserName -PasswordNeverExpires $false
+                Write-Host "User '$newUserName' created successfully."
+            } catch {
+                Write-Host "Failed to create user '$newUserName': $_"
+            }
+        }
+            Write-Host "Failed to update '$($user.Name)': $_"
 }
     }
     Write-Host "All users set: Password expires, User may change password."

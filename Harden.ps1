@@ -101,7 +101,7 @@ Get-MpPreference | Out-File -FilePath "$DOCS\defender.txt"
 # Save list of scheduled tasks
 Get-ScheduledTask | Out-File -FilePath "$DOCS\scheduled-tasks.txt"
 }
-ffunction Enable-Updates {
+function Enable-Updates {
     Write-Host "`n--- Starting: Enable updates ---`n"
 
     $keywords = @("username", "user:", "password", "pass:", "login")

@@ -266,7 +266,10 @@ function Account-Policies {
 # =========================
 #  Function Definitions
 # =========================
-
+function Local-Policies {
+    param (
+        OptionalParameters
+    )
 function Set-AuditLogonFailure {
     Write-Host "`n[1] Enabling Audit Logon [Failure] policy..."
 
@@ -350,6 +353,7 @@ function Show-LocalPolicyMenu {
     Pause
     Show-LocalPolicyMenu
 }
+}
 
 # =========================
 #  Entry Point
@@ -400,6 +404,7 @@ function Show-LocalPolicyMenu {
 
     Write-Host "`n--- Defensive Countermeasures Complete ---`n"
 }
+
 
 
 function Uncategorized-OS-Settings {

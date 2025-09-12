@@ -1143,7 +1143,7 @@ function application-Security-Settings {
         "2" { Enable-Updates }
         "3" { User-Auditing }
         "4" { account-Policies }
-        "5" { local-Policies "5" {
+        "5" {
     Clear-Host
 
     # Prompt user and get raw input as strings
@@ -1160,7 +1160,7 @@ function application-Security-Settings {
     Local-Policies -AuditLogonFailure:$auditLogon -TakeOwnershipRestricted:$takeOwnership -RequireCtrlAltDel:$ctrlAltDel
 
     Pause
-}
+
 
         }
         "6" {defensive-Countermeasures }

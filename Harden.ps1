@@ -219,30 +219,19 @@ function User-Auditing {
     $localUsers = Get-LocalUser
     foreach ($user in $localUsers) {
         try {
-            # Ensure password expires
-            Set-LocalUser -Name $user.Name -PasswordNeverExpires $false
-            # Ensure user can change password.
-        if ($addUserResponse -match "^[Yy]$") 
-            $newUserName = Read-Host "Enter the new username"
-            $newUserPassword = Read-Host "Enter the password for '$newUserName'"
-            try {
-                New-LocalUser -Name $newUserName -Password (ConvertTo-SecureString $newUserPassword -AsPlainText -Force)
-                # Set properties after creation
-                Set-LocalUser -Name $newUserName -UserMayChangePassword $true
-                Set-LocalUser -Name $newUserName -PasswordNeverExpires $false
-                Write-Host "User '$newUserName' created successfully."
-            } catch {
-                Write-Host "Failed to create user '$newUserName': $_"
-            }
-            Write-Host "Failed to update '$($user.Name)': $_"
+        New-LocalUser -Name $newUserName -Password (ConvertTo-SecureString $newUserPassword -AsPlainText -Force)
+        # Set properties after creation
+        Set-LocalUser -Name $newUserName -UserMayChangePassword $true
+        Set-LocalUser -Name $newUserName -PasswordNeverExpires $false
+        Write-Host "User '$newUserName' created successfully."
+    } catch {
+        Write-Host "Failed to create user '$newUserName': $_"
+    }
+    }
     Write-Host "All users set: Password expires, User may change password."
     Write-Host "Passwords for all users set to temporary value and will require change at next logon."
     Write-Host "`n--- User Auditing Complete --"
 }
-    }
-}
-
-
 
 function Admin-Auditing {
     Write-Host "`n--- Starting: Admin Auditing ---`n"

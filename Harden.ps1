@@ -364,7 +364,8 @@ function Uncategorized-OS-Settings {
 
 function service-Auditing {
     Write-Host "`n--- Starting: Service Auditing ---`n"
-        # Array of services to disable for security
+
+    # Array of services to disable for security
     $ServicesToDisable = @(
         'RemoteRegistry',
         'Spooler',
@@ -372,22 +373,49 @@ function service-Auditing {
         'SNMP',
         'Browser'
     )
-                foreach ($svc in $ServicesToDisable) {
-            try {
-                $service = Get-Service -Name $svc -ErrorAction Stop
-                if ($service.Status -eq 'Running') {
-                    Stop-Service -Name $svc -Force
-                    Write-Host "Service '$svc' stopped."
-                } else {
-                    Write-Host "Service '$svc' is not running."
-                }
-                Set-Service -Name $svc -StartupType Disabled
-                Write-Host "Service '$svc' startup type set to Disabled."
-            } catch {
-                Write-Host "Service '$svc' not found or error occurred: $_"
+
+    foreach ($svc in $ServicesToDisable) {
+        try {
+            $service = Get-Service -Name $svc -ErrorAction Stop
+            if ($service.Status -eq 'Running') {
+                Stop-Service -Name $svc -Force
+                Write-Host "Service '$svc' stopped."
+            } else {
+                Write-Host "Service '$svc' is not running."
             }
-        } 
+            Set-Service -Name $svc -StartupType Disabled
+            Write-Host "Service '$svc' startup type set to Disabled."
+        } catch {
+            Write-Host "Service '$svc' not found or error occurred: $_"
+        }
     }
+
+    # Option to disable FTP server services
+    $disableFTP = Read-Host "Would you like to stop and disable FTP Server services? (Y/n) [Default: n]"
+    if ($disableFTP -match "^[Yy]$") {
+        $ftpServices = @('FTPSVC', 'MSFTPSVC')
+        foreach ($ftpSvc in $ftpServices) {
+            try {
+                $service = Get-Service -Name $ftpSvc -ErrorAction Stop
+                if ($service.Status -eq 'Running') {
+                    Stop-Service -Name $ftpSvc -Force
+                    Write-Host "FTP Service '$ftpSvc' stopped."
+                } else {
+                    Write-Host "FTP Service '$ftpSvc' is not running."
+                }
+                Set-Service -Name $ftpSvc -StartupType Disabled
+                Write-Host "FTP Service '$ftpSvc' startup type set to Disabled."
+            } catch {
+                Write-Host "FTP Service '$ftpSvc' not found or error occurred: $_"
+            }
+        }
+    } else {
+        Write-Host "Skipping disabling FTP Server services."
+    }
+
+    Write-Host "`n--- Service Auditing Complete ---`n"
+}
+
 function os-Updates {
     Write-Host "`n--- Starting: OS Updates ---`n"
 

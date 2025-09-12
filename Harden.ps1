@@ -1143,7 +1143,25 @@ function application-Security-Settings {
         "2" { Enable-Updates }
         "3" { User-Auditing }
         "4" { account-Policies }
-        "5" { local-Policies }
+        "5" { local-Policies if ($choice -eq 5) {
+    Clear-Host
+
+    # Prompt for each policy
+    $auditLogonInput = Read-Host "Enable Audit Logon Failure? (Y/N)"
+    $takeOwnershipInput = Read-Host "Restrict Take Ownership to Administrators? (Y/N)"
+    $ctrlAltDelInput = Read-Host "Require CTRL+ALT+DEL for login? (Y/N)"
+
+    # Convert to booleans
+    $auditLogon = $auditLogonInput.Trim().ToUpper() -eq 'Y'
+    $takeOwnership = $takeOwnershipInput.Trim().ToUpper() -eq 'Y'
+    $ctrlAltDel = $ctrlAltDelInput.Trim().ToUpper() -eq 'Y'
+
+    # Call the Local-Policies function with the user choices
+    Local-Policies -AuditLogonFailure $auditLogon -TakeOwnershipRestricted $takeOwnership -RequireCtrlAltDel $ctrlAltDel
+
+    Pause
+}
+        }
         "6" {defensive-Countermeasures }
         "7" {uncategorized-OS-Settings }
         "8" {service-Auditing }

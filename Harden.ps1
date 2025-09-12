@@ -634,21 +634,21 @@ function application-Security-Settings {
 
     # Detect default browser from registry
     try {
-        $browserProgId = (Get-ItemProperty "HKCU:\Software\Microsoft\Windows\Shell\Associations\UrlAssociations\http\UserChoice").ProgId
-        switch ($browserProgId) {
-            "ChromeHTML"   { $defaultBrowser = "chrome" }
-            "MSEdgeHTM"    { $defaultBrowser = "edge" }
-            "FirefoxURL"   { $defaultBrowser = "firefox" }
-            default        { $defaultBrowser = $null }
+        $progId = (Get-ItemProperty "HKCU:\Software\Microsoft\Windows\Shell\Associations\UrlAssociations\http\UserChoice").ProgId
+        switch ($progId) {
+            "ChromeHTML" { $defaultBrowser = "chrome" }
+            "MSEdgeHTM" { $defaultBrowser = "edge" }
+            "FirefoxURL" { $defaultBrowser = "firefox" }
+            default { $defaultBrowser = $null }
         }
     } catch {
-        Write-Host "Could not detect default browser: $_" -ForegroundColor $ColorWarning
+        Write-Host "Could not detect default browser: $_" -ForegroundColor Yellow
         $defaultBrowser = $null
     }
 
     Write-Host "Current default browser: $defaultBrowser"
 
-    # Option to change default browser before uninstall
+    # Option to change default browser before disabling others
     $changeDefault = Read-Host "Would you like to change the default browser? (Y/n) [Default: n]"
     if ($changeDefault -match "^[Yy]$") {
         Write-Host "Options: chrome, edge, firefox"
@@ -661,7 +661,7 @@ function application-Security-Settings {
                     $defaultBrowser = "chrome"
                     Write-Host "Set Chrome as default browser."
                 } else {
-                    Write-Host "Chrome not found." -ForegroundColor $ColorWarning
+                    Write-Host "Chrome not found." -ForegroundColor Yellow
                 }
             }
             "edge" {
@@ -671,7 +671,7 @@ function application-Security-Settings {
                     $defaultBrowser = "edge"
                     Write-Host "Set Edge as default browser."
                 } else {
-                    Write-Host "Edge not found." -ForegroundColor $ColorWarning
+                    Write-Host "Edge not found." -ForegroundColor Yellow
                 }
             }
             "firefox" {
@@ -681,86 +681,95 @@ function application-Security-Settings {
                     $defaultBrowser = "firefox"
                     Write-Host "Set Firefox as default browser."
                 } else {
-                    Write-Host "Firefox not found." -ForegroundColor $ColorWarning
+                    Write-Host "Firefox not found." -ForegroundColor Yellow
                 }
             }
             default {
-                Write-Host "Unknown browser option." -ForegroundColor $ColorWarning
+                Write-Host "Unknown browser option." -ForegroundColor Yellow
             }
         }
     }
 
-    # Uninstall all browsers except the default
-    $browsers = @{
-        "chrome"  = "Google Chrome"
-        "edge"    = "Microsoft Edge"
-        "firefox" = "Mozilla Firefox"
-    }
+    # Disable all other browsers (instead of uninstalling)
+    $browsers = @("chrome", "edge", "firefox")
+    foreach ($browser in $browsers) {
+        if ($browser -ne $defaultBrowser) {
+            Write-Host "Disabling $browser since it's not the default..."
 
-    foreach ($browser in $browsers.Keys) {
-    if ($browser -ne $defaultBrowser) {
-        Write-Host "Attempting to uninstall $($browsers[$browser])..."
+            switch ($browser) {
+                "chrome" {
+                    # Try to block Chrome execution or updates
+                    $chromeRegPath = "HKLM:\SOFTWARE\Policies\Google\Update"
+                    if (-not (Test-Path $chromeRegPath)) {
+                        New-Item -Path $chromeRegPath -Force | Out-Null
+                    }
+                    Set-ItemProperty -Path $chromeRegPath -Name "UpdateDefault" -Value 0 -Type DWord
+                    Write-Host "Disabled Chrome auto-updates."
+                }
 
-        switch ($browser) {
-            "chrome" {
-                $uninstallKeyPaths = @(
-                    "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
-                    "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"
-                )
-
-                $chromeUninstallString = $null
-                foreach ($keyPath in $uninstallKeyPaths) {
-                    $keys = Get-ChildItem $keyPath -ErrorAction SilentlyContinue
-                    foreach ($key in $keys) {
-                        $props = Get-ItemProperty $key.PSPath -ErrorAction SilentlyContinue
-                        if ($props.DisplayName -like "*Google Chrome*") {
-                            $chromeUninstallString = $props.UninstallString
-                            break
+                "edge" {
+                    # Disable Edge update tasks
+                    $tasks = @(
+                        "MicrosoftEdgeUpdateTaskMachineCore",
+                        "MicrosoftEdgeUpdateTaskMachineUA"
+                    )
+                    foreach ($task in $tasks) {
+                        if (Get-ScheduledTask -TaskName $task -ErrorAction SilentlyContinue) {
+                            Disable-ScheduledTask -TaskName $task
+                            Write-Host "Disabled scheduled task: $task"
                         }
                     }
-                    if ($chromeUninstallString) { break }
+
+                    # Optional: attempt to rename Edge folder (if allowed)
+                    $edgeDir = "${env:ProgramFiles(x86)}\Microsoft\Edge"
+                    if (Test-Path $edgeDir) {
+                        try {
+                            Rename-Item -Path $edgeDir -NewName "Edge_DISABLED" -ErrorAction Stop
+                            Write-Host "Renamed Edge folder to disable launching."
+                        } catch {
+                            Write-Host "Could not rename Edge folder (in use or access denied)." -ForegroundColor Yellow
+                        }
+                    }
                 }
 
-                if ($chromeUninstallString) {
-                    Write-Host "Uninstalling Chrome using registry uninstall string..."
-                    Start-Process -FilePath "cmd.exe" -ArgumentList "/c `"$chromeUninstallString --force-uninstall`"" -Wait
-                } else {
-                    Write-Host "Google Chrome uninstall string not found." -ForegroundColor Yellow
-                }
-            }
+                "firefox" {
+                    $profilePath = "$env:APPDATA\Mozilla\Firefox\Profiles"
+                    $profile = Get-ChildItem $profilePath -Directory | Select-Object -First 1
+                    if ($profile) {
+                        $userJsPath = Join-Path $profile.FullName "user.js"
+                        $prefs = @(
+                            'user_pref("app.update.enabled", false);',
+                            'user_pref("app.update.auto", false);',
+                            'user_pref("app.update.service.enabled", false);'
+                        )
+                        $prefs | Out-File -FilePath $userJsPath -Encoding ASCII -Force
+                        Write-Host "Disabled Firefox auto-updates in profile."
+                    } else {
+                        Write-Host "No Firefox profile found." -ForegroundColor Yellow
+                    }
 
-            "firefox" {
-                $firefoxUninstallPaths = @(
-                    "${env:ProgramFiles}\Mozilla Firefox\uninstall\helper.exe",
-                    "${env:ProgramFiles(x86)}\Mozilla Firefox\uninstall\helper.exe"
-                )
-                $firefoxUninstall = $firefoxUninstallPaths | Where-Object { Test-Path $_ } | Select-Object -First 1
-                if ($firefoxUninstall) {
-                    Write-Host "Uninstalling Firefox..."
-                    Start-Process -FilePath $firefoxUninstall -ArgumentList "/S" -Wait
-                } else {
-                    Write-Host "Mozilla Firefox uninstaller not found." -ForegroundColor Yellow
-                }
-            }
-
-            "edge" {
-                $edgeUninstallTool = "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\Installer\setup.exe"
-
-                if (Test-Path $edgeUninstallTool) {
-                    Write-Host "Attempting to uninstall Microsoft Edge (system-level)..."
-                    Start-Process -FilePath $edgeUninstallTool -ArgumentList "--uninstall --system-level --force-uninstall --verbose-logging" -Wait
-                } else {
-                    Write-Host "Edge uninstaller not found at standard path. Note: Edge may be non-removable on this system." -ForegroundColor Yellow
+                    # Optional: try renaming Firefox.exe to prevent launching
+                    $firefoxExePaths = @(
+                        "${env:ProgramFiles}\Mozilla Firefox\firefox.exe",
+                        "${env:ProgramFiles(x86)}\Mozilla Firefox\firefox.exe"
+                    )
+                    foreach ($path in $firefoxExePaths) {
+                        if (Test-Path $path) {
+                            try {
+                                Rename-Item -Path $path -NewName "firefox_disabled.exe"
+                                Write-Host "Renamed Firefox executable to disable launching."
+                            } catch {
+                                Write-Host "Could not rename Firefox executable (access denied or running)." -ForegroundColor Yellow
+                            }
+                        }
+                    }
                 }
             }
         }
     }
-}
 
-    
     Write-Host "`n--- Application Security Settings Complete ---`n"
-
-    }
+}
 # Menu loop
 :menu do {
     Write-Host "`nSelect an option:`n"

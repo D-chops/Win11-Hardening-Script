@@ -903,189 +903,184 @@ function application-Security-Settings {
     Write-Host "`n--- Starting: Application Security Settings ---`n"
 
     # Detect default browser from registry
+    $defaultBrowser = $null
     try {
         $progId = (Get-ItemProperty "HKCU:\Software\Microsoft\Windows\Shell\Associations\UrlAssociations\http\UserChoice").ProgId
-        switch ($progId) {
-            "ChromeHTML" { $defaultBrowser = "chrome" }
-            "MSEdgeHTM" { $defaultBrowser = "edge" }
-            "FirefoxURL" { $defaultBrowser = "firefox" }
-            "IE.HTTP" { $defaultBrowser = "ie" }
-            default { $defaultBrowser = $null }
+        $defaultBrowser = switch ($progId) {
+            "ChromeHTML" { "chrome" }
+            "MSEdgeHTM"  { "edge" }
+            "FirefoxURL" { "firefox" }
+            "IE.HTTP"    { "ie" }
+            default      { $null }
         }
     } catch {
         Write-Host "Could not detect default browser: $_" -ForegroundColor Yellow
-        $defaultBrowser = $null
     }
 
     Write-Host "Current default browser: $defaultBrowser"
 
-    # Option to change default browser before disabling/uninstalling others
+    # Ask user if they want to change the default browser
     $changeDefault = Read-Host "Would you like to change the default browser? (Y/n) [Default: n]"
     if ($changeDefault -match "^[Yy]$") {
         Write-Host "Options: chrome, edge, firefox, ie"
         $newDefault = Read-Host "Enter the browser to set as default"
+
         switch ($newDefault.ToLower()) {
             "chrome" {
-                $chromePath = "${env:ProgramFiles(x86)}\Google\Chrome\Application\chrome.exe"
-                if (Test-Path $chromePath) {
-                    Start-Process -FilePath $chromePath -ArgumentList "--make-default-browser"
+                $path = "${env:ProgramFiles(x86)}\Google\Chrome\Application\chrome.exe"
+                if (Test-Path $path) {
+                    Start-Process -FilePath $path -ArgumentList "--make-default-browser"
                     $defaultBrowser = "chrome"
                     Write-Host "Set Chrome as default browser."
                 } else {
                     Write-Host "Chrome not found." -ForegroundColor Yellow
                 }
             }
+
             "edge" {
-                $edgePath = "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe"
-                if (Test-Path $edgePath) {
-                    Start-Process -FilePath $edgePath -ArgumentList "--make-default-browser"
+                $path = "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe"
+                if (Test-Path $path) {
+                    Start-Process -FilePath $path -ArgumentList "--make-default-browser"
                     $defaultBrowser = "edge"
                     Write-Host "Set Edge as default browser."
                 } else {
                     Write-Host "Edge not found." -ForegroundColor Yellow
                 }
             }
+
             "firefox" {
-                $firefoxPath = "${env:ProgramFiles}\Mozilla Firefox\firefox.exe"
-                if (Test-Path $firefoxPath) {
-                    Start-Process -FilePath $firefoxPath -ArgumentList "-setDefaultBrowser"
+                $path = "${env:ProgramFiles}\Mozilla Firefox\firefox.exe"
+                if (Test-Path $path) {
+                    Start-Process -FilePath $path -ArgumentList "-setDefaultBrowser"
                     $defaultBrowser = "firefox"
                     Write-Host "Set Firefox as default browser."
                 } else {
                     Write-Host "Firefox not found." -ForegroundColor Yellow
                 }
             }
+
             "ie" {
-                Write-Host "To set IE as default browser, please configure via Settings manually." -ForegroundColor Yellow
+                Write-Host "To set IE as default browser, please configure it manually via Settings." -ForegroundColor Yellow
                 $defaultBrowser = "ie"
             }
+
             default {
                 Write-Host "Unknown browser option." -ForegroundColor Yellow
             }
         }
     }
 
-    # Disable/uninstall all other browsers except default
+    # Disable or uninstall all other browsers
     $browsers = @("chrome", "edge", "firefox", "ie")
     foreach ($browser in $browsers) {
-        if ($browser -ne $defaultBrowser) {
-            Write-Host "Processing $browser since it's not the default..."
+        if ($browser -eq $defaultBrowser) { continue }
 
-            switch ($browser) {
-                "chrome" {
-                    # Disable Chrome auto-updates via registry policy
-                    $chromeRegPath = "HKLM:\SOFTWARE\Policies\Google\Update"
-                    if (-not (Test-Path $chromeRegPath)) {
-                        New-Item -Path $chromeRegPath -Force | Out-Null
+        Write-Host "`nProcessing $browser (not the default)..."
+
+        switch ($browser) {
+            "chrome" {
+                $regPath = "HKLM:\SOFTWARE\Policies\Google\Update"
+                if (-not (Test-Path $regPath)) {
+                    New-Item -Path $regPath -Force | Out-Null
+                }
+                Set-ItemProperty -Path $regPath -Name "UpdateDefault" -Value 0 -Type DWord
+                Write-Host "Disabled Chrome auto-updates."
+            }
+
+            "edge" {
+                $tasks = @("MicrosoftEdgeUpdateTaskMachineCore", "MicrosoftEdgeUpdateTaskMachineUA")
+                foreach ($task in $tasks) {
+                    if (Get-ScheduledTask -TaskName $task -ErrorAction SilentlyContinue) {
+                        Disable-ScheduledTask -TaskName $task
+                        Write-Host "Disabled scheduled task: $task"
                     }
-                    Set-ItemProperty -Path $chromeRegPath -Name "UpdateDefault" -Value 0 -Type DWord
-                    Write-Host "Disabled Chrome auto-updates."
                 }
 
-                "edge" {
-                    # Disable Edge update scheduled tasks
-                    $tasks = @(
-                        "MicrosoftEdgeUpdateTaskMachineCore",
-                        "MicrosoftEdgeUpdateTaskMachineUA"
-                    )
-                    foreach ($task in $tasks) {
-                        if (Get-ScheduledTask -TaskName $task -ErrorAction SilentlyContinue) {
-                            Disable-ScheduledTask -TaskName $task
-                            Write-Host "Disabled scheduled task: $task"
-                        }
+                $edgeDir = "${env:ProgramFiles(x86)}\Microsoft\Edge"
+                if (Test-Path $edgeDir) {
+                    try {
+                        Rename-Item -Path $edgeDir -NewName "Edge_DISABLED" -ErrorAction Stop
+                        Write-Host "Renamed Edge folder to disable launching."
+                    } catch {
+                        Write-Host "Could not rename Edge folder (in use or access denied)." -ForegroundColor Yellow
                     }
+                }
+            }
 
-                    # Attempt to rename Edge folder (may require admin & file not in use)
-                    $edgeDir = "${env:ProgramFiles(x86)}\Microsoft\Edge"
-                    if (Test-Path $edgeDir) {
+            "firefox" {
+                $profilePath = "$env:APPDATA\Mozilla\Firefox\Profiles"
+                $profile = Get-ChildItem $profilePath -Directory -ErrorAction SilentlyContinue | Select-Object -First 1
+
+                if ($profile) {
+                    $userJsPath = Join-Path $profile.FullName "user.js"
+                    $prefs = @(
+                        'user_pref("app.update.enabled", false);',
+                        'user_pref("app.update.auto", false);',
+                        'user_pref("app.update.service.enabled", false);'
+                    )
+                    $prefs | Out-File -FilePath $userJsPath -Encoding ASCII -Force
+                    Write-Host "Disabled Firefox auto-updates in profile."
+                } else {
+                    Write-Host "No Firefox profile found." -ForegroundColor Yellow
+                }
+
+                $exePaths = @(
+                    "${env:ProgramFiles}\Mozilla Firefox\firefox.exe",
+                    "${env:ProgramFiles(x86)}\Mozilla Firefox\firefox.exe"
+                )
+                foreach ($path in $exePaths) {
+                    if (Test-Path $path) {
                         try {
-                            Rename-Item -Path $edgeDir -NewName "Edge_DISABLED" -ErrorAction Stop
-                            Write-Host "Renamed Edge folder to disable launching."
+                            Rename-Item -Path $path -NewName "firefox_disabled.exe"
+                            Write-Host "Renamed Firefox executable to disable launching."
                         } catch {
-                            Write-Host "Could not rename Edge folder (in use or access denied)." -ForegroundColor Yellow
+                            Write-Host "Could not rename Firefox executable (access denied or running)." -ForegroundColor Yellow
                         }
                     }
                 }
+            }
 
-                "firefox" {
-                    $profilePath = "$env:APPDATA\Mozilla\Firefox\Profiles"
-                    $profile = Get-ChildItem $profilePath -Directory -ErrorAction SilentlyContinue | Select-Object -First 1
-                    if ($profile) {
-                        $userJsPath = Join-Path $profile.FullName "user.js"
-                        $prefs = @(
-                            'user_pref("app.update.enabled", false);',
-                            'user_pref("app.update.auto", false);',
-                            'user_pref("app.update.service.enabled", false);'
-                        )
-                        $prefs | Out-File -FilePath $userJsPath -Encoding ASCII -Force
-                        Write-Host "Disabled Firefox auto-updates in profile."
-                    } else {
-                        Write-Host "No Firefox profile found." -ForegroundColor Yellow
+            "ie" {
+                Write-Host "Checking for Internet Explorer..."
+
+                $ieFeatures = Get-WindowsOptionalFeature -Online | Where-Object FeatureName -like "*InternetExplorer*"
+                $ieCapability = dism.exe /online /Get-CapabilityInfo /CapabilityName:Browser.InternetExplorer~~~~0.0.11.0 2>&1
+
+                $iexplorePaths = @(
+                    "$env:windir\SysWOW64\iexplore.exe",
+                    "$env:windir\System32\iexplore.exe"
+                )
+
+                $iexists = $iexplorePaths | Where-Object { Test-Path $_ } | Measure-Object | Select-Object -ExpandProperty Count
+
+                if (($ieFeatures -and $ieFeatures.State -eq "Enabled") -or
+                    ($ieCapability -match "State.*Installed") -or
+                    ($iexists -gt 0)) {
+
+                    foreach ($feature in $ieFeatures) {
+                        if ($feature.State -eq "Enabled") {
+                            Write-Host "Disabling IE feature: $($feature.FeatureName)..."
+                            Disable-WindowsOptionalFeature -Online -FeatureName $feature.FeatureName -NoRestart -ErrorAction SilentlyContinue
+                        }
                     }
 
-                    # Rename firefox.exe to disable launching
-                    $firefoxExePaths = @(
-                        "${env:ProgramFiles}\Mozilla Firefox\firefox.exe",
-                        "${env:ProgramFiles(x86)}\Mozilla Firefox\firefox.exe"
-                    )
-                    foreach ($path in $firefoxExePaths) {
+                    if ($ieCapability -match "State.*Installed") {
+                        Write-Host "Removing IE capability via DISM..."
+                        dism.exe /online /Remove-Capability /CapabilityName:Browser.InternetExplorer~~~~0.0.11.0 /NoRestart 2>&1 | Out-Null
+                    }
+
+                    foreach ($path in $iexplorePaths) {
                         if (Test-Path $path) {
                             try {
-                                Rename-Item -Path $path -NewName "firefox_disabled.exe"
-                                Write-Host "Renamed Firefox executable to disable launching."
+                                Rename-Item -Path $path -NewName "iexplore_disabled.exe" -Force
+                                Write-Host "Renamed $path to disable IE launching."
                             } catch {
-                                Write-Host "Could not rename Firefox executable (access denied or running)." -ForegroundColor Yellow
+                                Write-Host "Could not rename $path (access denied or in use)." -ForegroundColor Yellow
                             }
                         }
                     }
-                }
-
-                "ie" {
-                    # Dynamically get IE-related features and disable them
-                    $ieFeatures = Get-WindowsOptionalFeature -Online | Where-Object FeatureName -like "*InternetExplorer*"
-
-                    if ($ieFeatures) {
-                        $ieFeatureUninstalled = $false
-                        foreach ($feature in $ieFeatures) {
-                            if ($feature.State -eq "Enabled") {
-                                Write-Host "Disabling Internet Explorer feature: $($feature.FeatureName) ..."
-                                Disable-WindowsOptionalFeature -Online -FeatureName $feature.FeatureName -NoRestart -ErrorAction SilentlyContinue
-                                $ieFeatureUninstalled = $true
-                            }
-                        }
-                        if ($ieFeatureUninstalled) {
-                            Write-Host "Internet Explorer feature(s) disabled. Please restart your system to complete the uninstall."
-                        } else {
-                            Write-Host "Internet Explorer feature already disabled."
-                        }
-                    } else {
-                        Write-Host "No Internet Explorer features found."
-                    }
-
-                    # Try uninstalling IE package via DISM as fallback
-                    $dismOutput = dism.exe /online /Remove-Package /PackageName:Microsoft-Windows-InternetExplorer-Package~31bf3856ad364e35~amd64~~10.0.19041.1 /NoRestart 2>&1
-
-                    if ($dismOutput -match "The operation completed successfully") {
-                        Write-Host "Successfully uninstalled Internet Explorer package via DISM. Please restart your system."
-                    } else {
-                        Write-Host "DISM uninstall of IE package failed or package not found. You may need to uninstall IE manually." -ForegroundColor Yellow
-                    }
-
-                    # Rename iexplore.exe to disable launching
-                    $iePaths = @(
-                        "$env:windir\SysWOW64\iexplore.exe",
-                        "$env:windir\System32\iexplore.exe"
-                    )
-                    foreach ($iePath in $iePaths) {
-                        if (Test-Path $iePath) {
-                            try {
-                                Rename-Item -Path $iePath -NewName "iexplore_disabled.exe"
-                                Write-Host "Renamed iexplore.exe to disable launching."
-                            } catch {
-                                Write-Host "Could not rename iexplore.exe (access denied or running)." -ForegroundColor Yellow
-                            }
-                        }
-                    }
+                } else {
+                    Write-Host "Internet Explorer does not appear to be present or is already disabled."
                 }
             }
         }

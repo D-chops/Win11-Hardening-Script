@@ -254,33 +254,49 @@ function Account-Policies {
     Write-Host "`n--- Account-Policies Complete ---`n"
 }
 function local-Policies {
-    Write-Host "`n--- Starting: Local Policies ---`n"
-        Write-Host "`n--- Exporting and Restricting SeTakeOwnershipPrivilege ---`n"
+      function Harden-UserRights {
+        Write-Host "`n--- Exporting and Hardening User Rights Assignments ---`n"
     
-        $PUSER = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name.Split('\')[-1]
-        $DOCS = "C:\Users\$PUSER\Desktop\DOCS"
-        $exportPath = "C:\Windows\Security\local.sdb"
-        $backupPath = ".\local.sdb.bak"
+        # Paths
+        $secpolInf = ".\secpol.inf"
+        $backupInf = ".\secpol-backup.inf"
+        $localSdb  = "C:\Windows\Security\local.sdb"
     
-        # Export current security policy
-        secedit /export /cfg $exportPath
+        # Backup current local security database
+        Copy-Item -Path $localSdb -Destination $backupInf -ErrorAction SilentlyContinue
+        Write-Host "Backup of local security database saved to $backupInf"
     
-        # Backup the exported policy
-        Copy-Item -Path $exportPath -Destination $backupPath -Force
-        Write-Host "Backup of security policy saved to $backupPath"
+        # Export current security policy to INF
+        secedit /export /cfg $secpolInf
     
-        # Restrict SeTakeOwnershipPrivilege to Administrators group only (S-1-5-32-544)
-        $lines = Get-Content $exportPath
-        $lines = $lines -replace 'SeTakeOwnershipPrivilege\s*=.*', 'SeTakeOwnershipPrivilege = *S-1-5-32-544'
-        Set-Content -Path $exportPath -Value $lines
-        Write-Host "SeTakeOwnershipPrivilege restricted to Administrators group in $exportPath"
+        # Harden user rights assignments
+        $content = Get-Content $secpolInf
+    
+        $content = $content `
+            -replace '^.*SeTakeOwnershipPrivilege.*$',         'SeTakeOwnershipPrivilege = *S-1-5-32-544' `
+            -replace '^.*SeTrustedCredManAccessPrivilege.*$',  'SeTrustedCredManAccessPrivilege = *S-1-5-32-544' `
+            -replace '^.*SeDenyNetworkLogonRight.*$',          'SeDenyNetworkLogonRight = *S-1-1-0,*S-1-5-32-546' `
+            -replace '^.*SeCreateTokenPrivilege.*$',           'SeCreateTokenPrivilege = *S-1-5-32-544' `
+            -replace '^.*SeCreateGlobalPrivilege.*$',          'SeCreateGlobalPrivilege = *S-1-5-32-544' `
+            -replace '^.*SeRemoteShutdownPrivilege.*$',        'SeRemoteShutdownPrivilege = *S-1-5-32-544' `
+            -replace '^.*SeLoadDriverPrivilege.*$',            'SeLoadDriverPrivilege = *S-1-5-32-544' `
+            -replace '^.*SeSecurityPrivilege.*$',              'SeSecurityPrivilege = *S-1-5-32-544'
+    
+        Set-Content -Path $secpolInf -Value $content
+        Write-Host "User rights assignments updated in $secpolInf"
     
         # Import the modified policy and overwrite the database
-        secedit /configure /db secedit.sdb /cfg $exportPath /overwrite
+        echo y | secedit /configure /db $localSdb /cfg $secpolInf /overwrite
     
-        Write-Host "`n--- Security policy import complete ---`n"
-}
-function defensive-Countermeasures {
+        Write-Host "`n--- User Rights Hardening Complete ---`n"
+    
+        # Optional: Verify changes
+        secedit /export /cfg ".\verify.inf"
+        Write-Host "Verification lines:"
+        Select-String -Path ".\verify.inf" -Pattern '^SeTakeOwnershipPrivilege|^SeTrustedCredManAccessPrivilege|^SeDenyNetworkLogonRight|^SeCreateTokenPrivilege|^SeCreateGlobalPrivilege|^SeRemoteShutdownPrivilege|^SeLoadDriverPrivilege|^SeSecurityPrivilege'
+      }
+    }
+        function defensive-Countermeasures {
     Write-Host "`n--- Starting: Defensive Countermeasures ---`n"
 }
 function uncategorized-OS-Settings {

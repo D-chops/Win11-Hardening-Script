@@ -259,8 +259,8 @@ function local-Policies {
     
         $PUSER = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name.Split('\')[-1]
         $DOCS = "C:\Users\$PUSER\Desktop\DOCS"
-        $exportPath = "$DOCS\secpol.inf"
-        $backupPath = "$DOCS\secpol-backup.inf"
+        $exportPath = "C:\Windows\Security\local.sdb"
+        $backupPath = ".\local.sdb.bak"
     
         # Export current security policy
         secedit /export /cfg $exportPath

@@ -919,7 +919,7 @@ function application-Security-Settings {
 
     Write-Host "Current default browser: $defaultBrowser"
 
-    # Option to change default browser before disabling others
+    # Option to change default browser before disabling/uninstalling others
     $changeDefault = Read-Host "Would you like to change the default browser? (Y/n) [Default: n]"
     if ($changeDefault -match "^[Yy]$") {
         Write-Host "Options: chrome, edge, firefox, ie"
@@ -956,7 +956,7 @@ function application-Security-Settings {
                 }
             }
             "ie" {
-                # IE does not have a simple command line for default browser, suggest manual
+                # IE default browser has no command-line set, manual
                 Write-Host "To set IE as default browser, please configure via Settings manually." -ForegroundColor Yellow
                 $defaultBrowser = "ie"
             }
@@ -966,11 +966,11 @@ function application-Security-Settings {
         }
     }
 
-    # Disable all other browsers (instead of uninstalling)
+    # Disable/uninstall all other browsers except default
     $browsers = @("chrome", "edge", "firefox", "ie")
     foreach ($browser in $browsers) {
         if ($browser -ne $defaultBrowser) {
-            Write-Host "Disabling $browser since it's not the default..."
+            Write-Host "Processing $browser since it's not the default..."
 
             switch ($browser) {
                 "chrome" {
@@ -984,7 +984,7 @@ function application-Security-Settings {
                 }
 
                 "edge" {
-                    # Disable Edge update tasks
+                    # Disable Edge update scheduled tasks
                     $tasks = @(
                         "MicrosoftEdgeUpdateTaskMachineCore",
                         "MicrosoftEdgeUpdateTaskMachineUA"
@@ -996,7 +996,7 @@ function application-Security-Settings {
                         }
                     }
 
-                    # Attempt to rename Edge folder (if allowed)
+                    # Attempt to rename Edge folder (may require admin & file not in use)
                     $edgeDir = "${env:ProgramFiles(x86)}\Microsoft\Edge"
                     if (Test-Path $edgeDir) {
                         try {
@@ -1024,7 +1024,7 @@ function application-Security-Settings {
                         Write-Host "No Firefox profile found." -ForegroundColor Yellow
                     }
 
-                    # Try renaming Firefox executable to prevent launching
+                    # Rename firefox.exe to disable launching
                     $firefoxExePaths = @(
                         "${env:ProgramFiles}\Mozilla Firefox\firefox.exe",
                         "${env:ProgramFiles(x86)}\Mozilla Firefox\firefox.exe"
@@ -1042,17 +1042,19 @@ function application-Security-Settings {
                 }
 
                 "ie" {
-                    # Disable IE via Windows Feature
+                    # Disable and uninstall IE Windows Feature
                     $featureName = "Internet-Explorer-Optional-amd64"
                     $feature = Get-WindowsOptionalFeature -Online -FeatureName $featureName -ErrorAction SilentlyContinue
                     if ($feature -and $feature.State -eq "Enabled") {
-                        Disable-WindowsOptionalFeature -Online -FeatureName $featureName -NoRestart
-                        Write-Host "Disabled Internet Explorer feature."
+                        Write-Host "Disabling and uninstalling Internet Explorer feature..."
+                        Disable-WindowsOptionalFeature -Online -FeatureName $featureName -NoRestart -ErrorAction SilentlyContinue
+                        # Optionally, request restart here:
+                        Write-Host "Internet Explorer feature disabled. Please restart the system to complete uninstall."
                     } else {
                         Write-Host "Internet Explorer feature already disabled or not found."
                     }
 
-                    # Try renaming iexplore.exe (usually in SysWOW64 and System32)
+                    # Try renaming iexplore.exe to prevent launch
                     $iePaths = @(
                         "$env:windir\SysWOW64\iexplore.exe",
                         "$env:windir\System32\iexplore.exe"
@@ -1074,6 +1076,7 @@ function application-Security-Settings {
 
     Write-Host "`n--- Application Security Settings Complete ---`n"
 }
+
 
 # Menu loop
 :menu do {

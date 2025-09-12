@@ -342,7 +342,39 @@ function service-Auditing {
     }
 function os-Updates {
     Write-Host "`n--- Starting: OS Updates ---`n"
+
+    # Check for Windows updates using PowerShell Update module (if available)
+    try {
+        # Install PSWindowsUpdate module if not present
+        if (-not (Get-Module -ListAvailable -Name PSWindowsUpdate)) {
+            Write-Host "Installing PSWindowsUpdate module..."
+            Install-Module -Name PSWindowsUpdate -Force -Scope CurrentUser
+        }
+
+        Import-Module PSWindowsUpdate
+
+        # List available updates
+        Write-Host "Checking for available Windows updates..."
+        Get-WindowsUpdate
+
+        # Install all available updates
+        Write-Host "Installing all available Windows updates..."
+        Install-WindowsUpdate -AcceptAll -AutoReboot
+
+    } catch {
+        Write-Host "Failed to run Windows updates: $_" -ForegroundColor $ColorWarning
+    }
+
+    # Update Windows Defender signatures (if Defender is present)
+    try {
+        Write-Host "Updating Windows Defender signatures..."
+        Update-MpSignature
+    } catch {
+        Write-Host "Failed to update Windows Defender signatures: $_" -ForegroundColor $ColorWarning
+    }
 }
+
+    Write-Host "`n--- OS Updates Complete ---"
 function application-Updates {
     Write-Host "`n--- Starting: Application Updates ---`n"
 }

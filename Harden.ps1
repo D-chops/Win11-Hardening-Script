@@ -278,57 +278,70 @@ function Local-Policies {
         [switch]$DoNotRequireCtrlAltDel
     )
 
-    $secpolInf = "$env:TEMP\secpol.inf"
+    $secpolInf = Join-Path -Path $env:TEMP -ChildPath "secpol.inf"
 
-    # Export current settings
+    # Export current security policy to file
     secedit /export /cfg $secpolInf | Out-Null
-    $content = Get-Content $secpolInf
+    $content = Get-Content $secpolInf -Raw
 
+    # Helper function to update or add a setting in secpol.inf content
     function Update-SecPolSetting {
         param (
             [string]$Key,
             [string]$Value
         )
 
-        if ($content -notmatch "^$Key\s*=") {
-            Add-Content -Path $secpolInf -Value "`n$Key = $Value"
-        } else {
-            $content = $content -replace "^$Key\s*=.*$", "$Key = $Value"
-            Set-Content -Path $secpolInf -Value $content
+        if ($content -match "^\s*$Key\s*=") {
+            # Replace existing line
+            $pattern = "^\s*$Key\s*=.*$"
+            $content = $content -replace $pattern, "$Key = $Value"
+        }
+        else {
+            # Add new setting
+            $content += "`r`n$Key = $Value"
         }
     }
 
-    # === Audit Logon Events (Failure Only) ===
+    # === Audit Logon Events (Failure) ===
     if ($EnableAuditLogonFailure) {
-        Write-Host "`n[+] Enabling Audit Logon [Failure]..."
+        Write-Host "[*] Enabling Audit Logon [Failure]..."
         Update-SecPolSetting -Key "AuditLogonEvents" -Value "0 1"
-    } elseif ($DisableAuditLogonFailure) {
-        Write-Host "`n[-] Disabling Audit Logon [Failure]..."
+    }
+    elseif ($DisableAuditLogonFailure) {
+        Write-Host "[*] Disabling Audit Logon [Failure]..."
         Update-SecPolSetting -Key "AuditLogonEvents" -Value "0 0"
     }
 
     # === Take Ownership Privilege ===
     if ($RestrictTakeOwnership) {
-        Write-Host "`n[+] Restricting SeTakeOwnershipPrivilege to Administrators..."
+        Write-Host "[*] Restricting SeTakeOwnershipPrivilege to Administrators..."
         Update-SecPolSetting -Key "SeTakeOwnershipPrivilege" -Value "*S-1-5-32-544"
-    } elseif ($AllowTakeOwnership) {
-        Write-Host "`n[-] Removing restriction from SeTakeOwnershipPrivilege (empty)..."
+    }
+    elseif ($AllowTakeOwnership) {
+        Write-Host "[*] Allowing SeTakeOwnershipPrivilege (removing restriction)..."
         Update-SecPolSetting -Key "SeTakeOwnershipPrivilege" -Value ""
     }
 
     # === CTRL+ALT+DEL Requirement ===
     if ($RequireCtrlAltDel) {
-        Write-Host "`n[+] Enforcing CTRL+ALT+DEL requirement for logon..."
+        Write-Host "[*] Enforcing CTRL+ALT+DEL requirement for logon..."
         Update-SecPolSetting -Key "DisableCAD" -Value "0"
-    } elseif ($DoNotRequireCtrlAltDel) {
-        Write-Host "`n[-] Disabling CTRL+ALT+DEL requirement..."
+    }
+    elseif ($DoNotRequireCtrlAltDel) {
+        Write-Host "[*] Disabling CTRL+ALT+DEL requirement for logon..."
         Update-SecPolSetting -Key "DisableCAD" -Value "1"
     }
 
-    # Apply changes
+    # Save updated content back to secpol.inf
+    Set-Content -Path $secpolInf -Value $content -Encoding ASCII
+
+    # Apply the updated security policy
+    Write-Host "[*] Applying updated security policies..."
     echo y | secedit /configure /cfg $secpolInf /overwrite | Out-Null
-    Write-Host "`n[✔] Policies updated successfully."
+
+    Write-Host "[+] Policies applied successfully."
 }
+
 
 
       function defensive-Countermeasures {

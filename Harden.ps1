@@ -254,8 +254,7 @@ function Account-Policies {
     Write-Host "`n--- Account-Policies Complete ---`n"
 }
 function local-Policies {
-      function Harden-UserRights {
-        Write-Host "`n--- Exporting and Hardening User Rights Assignments ---`n"
+     Write-Host "`n--- Exporting and Hardening User Rights Assignments ---`n"
     
         # Paths
         $secpolInf = ".\secpol.inf"

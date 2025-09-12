@@ -376,8 +376,52 @@ function os-Updates {
 
     Write-Host "`n--- OS Updates Complete ---"
 function application-Updates {
-    Write-Host "`n--- Starting: Application Updates ---`n"
+    Write-Host "`n--- Starting: Application Updates (Default Browser) ---`n"
+
+    # Detect default browser from registry
+    try {
+        $browserProgId = (Get-ItemProperty "HKCU:\Software\Microsoft\Windows\Shell\Associations\UrlAssociations\http\UserChoice").ProgId
+        switch ($browserProgId) {
+            "ChromeHTML" {
+                Write-Host "Detected default browser: Google Chrome"
+                $chromePath = "${env:ProgramFiles(x86)}\Google\Chrome\Application\chrome.exe"
+                if (Test-Path $chromePath) {
+                    Write-Host "Running Chrome update..."
+                    Start-Process -FilePath $chromePath -ArgumentList "--check-for-update-interval=1" -WindowStyle Hidden
+                } else {
+                    Write-Host "Chrome executable not found." -ForegroundColor $ColorWarning
+                }
+            }
+            "MSEdgeHTM" {
+                Write-Host "Detected default browser: Microsoft Edge"
+                $edgePath = "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe"
+                if (Test-Path $edgePath) {
+                    Write-Host "Running Edge update..."
+                    Start-Process -FilePath $edgePath -ArgumentList "--check-for-update-interval=1" -WindowStyle Hidden
+                } else {
+                    Write-Host "Edge executable not found." -ForegroundColor $ColorWarning
+                }
+            }
+            "FirefoxURL" {
+                Write-Host "Detected default browser: Mozilla Firefox"
+                $firefoxPath = "${env:ProgramFiles}\Mozilla Firefox\firefox.exe"
+                if (Test-Path $firefoxPath) {
+                    Write-Host "Running Firefox update..."
+                    Start-Process -FilePath $firefoxPath -ArgumentList "-headless -update" -WindowStyle Hidden
+                } else {
+                    Write-Host "Firefox executable not found." -ForegroundColor $ColorWarning
+                }
+            }
+            default {
+                Write-Host "Default browser not recognized or not supported for auto-update." -ForegroundColor $ColorWarning
+            }
+        }
+    } catch {
+        Write-Host "Could not detect default browser or run update: $_" -ForegroundColor $ColorWarning
+    }
 }
+
+    Write-Host "`n--- Application Updates Complete ---`n"
 function prohibited-Files {
     Write-Host "`n--- Starting: Prohibited Files ---`n"
 }
@@ -389,7 +433,109 @@ function malware {
 }
 function application-Security-Settings {
     Write-Host "`n--- Starting: Application Security Settings ---`n"
+
+    # Detect default browser from registry
+    try {
+        $browserProgId = (Get-ItemProperty "HKCU:\Software\Microsoft\Windows\Shell\Associations\UrlAssociations\http\UserChoice").ProgId
+        switch ($browserProgId) {
+            "ChromeHTML"   { $defaultBrowser = "chrome" }
+            "MSEdgeHTM"    { $defaultBrowser = "edge" }
+            "FirefoxURL"   { $defaultBrowser = "firefox" }
+            default        { $defaultBrowser = $null }
+        }
+    } catch {
+        Write-Host "Could not detect default browser: $_" -ForegroundColor $ColorWarning
+        $defaultBrowser = $null
+    }
+
+    Write-Host "Current default browser: $defaultBrowser"
+
+    # Option to change default browser before uninstall
+    $changeDefault = Read-Host "Would you like to change the default browser? (Y/n) [Default: n]"
+    if ($changeDefault -match "^[Yy]$") {
+        Write-Host "Options: chrome, edge, firefox"
+        $newDefault = Read-Host "Enter the browser to set as default"
+        switch ($newDefault.ToLower()) {
+            "chrome" {
+                $chromePath = "${env:ProgramFiles(x86)}\Google\Chrome\Application\chrome.exe"
+                if (Test-Path $chromePath) {
+                    Start-Process -FilePath $chromePath -ArgumentList "--make-default-browser"
+                    $defaultBrowser = "chrome"
+                    Write-Host "Set Chrome as default browser."
+                } else {
+                    Write-Host "Chrome not found." -ForegroundColor $ColorWarning
+                }
+            }
+            "edge" {
+                $edgePath = "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe"
+                if (Test-Path $edgePath) {
+                    Start-Process -FilePath $edgePath -ArgumentList "--make-default-browser"
+                    $defaultBrowser = "edge"
+                    Write-Host "Set Edge as default browser."
+                } else {
+                    Write-Host "Edge not found." -ForegroundColor $ColorWarning
+                }
+            }
+            "firefox" {
+                $firefoxPath = "${env:ProgramFiles}\Mozilla Firefox\firefox.exe"
+                if (Test-Path $firefoxPath) {
+                    Start-Process -FilePath $firefoxPath -ArgumentList "-setDefaultBrowser"
+                    $defaultBrowser = "firefox"
+                    Write-Host "Set Firefox as default browser."
+                } else {
+                    Write-Host "Firefox not found." -ForegroundColor $ColorWarning
+                }
+            }
+            default {
+                Write-Host "Unknown browser option." -ForegroundColor $ColorWarning
+            }
+        }
+    }
+
+    # Uninstall all browsers except the default
+    $browsers = @{
+        "chrome"  = "Google Chrome"
+        "edge"    = "Microsoft Edge"
+        "firefox" = "Mozilla Firefox"
+    }
+
+    foreach ($browser in $browsers.Keys) {
+        if ($browser -ne $defaultBrowser) {
+            Write-Host "Attempting to uninstall $($browsers[$browser])..."
+            switch ($browser) {
+                "chrome" {
+                    $chromeUninstall = "${env:ProgramFiles(x86)}\Google\Chrome\Application\chrome.exe"
+                    if (Test-Path $chromeUninstall) {
+                        Start-Process -FilePath $chromeUninstall -ArgumentList "--uninstall --force-uninstall" -Wait
+                        Write-Host "Google Chrome uninstall command executed."
+                    } else {
+                        Write-Host "Google Chrome not found." -ForegroundColor $ColorWarning
+                    }
+                }
+                "edge" {
+                    $edgeUninstall = "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\Installer\setup.exe"
+                    if (Test-Path $edgeUninstall) {
+                        Start-Process -FilePath $edgeUninstall -ArgumentList "--uninstall --system-level --force-uninstall" -Wait
+                        Write-Host "Microsoft Edge uninstall command executed."
+                    } else {
+                        Write-Host "Microsoft Edge uninstaller not found." -ForegroundColor $ColorWarning
+                    }
+                }
+                "firefox" {
+                    $firefoxUninstall = "${env:ProgramFiles}\Mozilla Firefox\uninstall\helper.exe"
+                    if (Test-Path $firefoxUninstall) {
+                        Start-Process -FilePath $firefoxUninstall -ArgumentList "/S" -Wait
+                        Write-Host "Mozilla Firefox uninstall command executed."
+                    } else {
+                        Write-Host "Mozilla Firefox uninstaller not found." -ForegroundColor $ColorWarning
+                    }
+                }
+            }
+        }
+    }
 }
+
+    Write-Host "`n--- Application Security Settings Complete ---`n"
 
 # Menu loop
 :menu do {

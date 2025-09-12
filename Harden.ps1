@@ -378,34 +378,34 @@ function application-Updates {
         Set-ItemProperty -Path $chromeUpdateKey -Name "AutoUpdateCheckPeriodMinutes" -Value 60 -Type DWord
         Set-ItemProperty -Path $chromeUpdateKey -Name "UpdateDefault" -Value 1 -Type DWord
 
-        # Check if Google Update services exist
-        $services = @("gupdate", "gupdatem")
+        # Check if Google Update executable exists
         $googleUpdateExePaths = @(
             "${env:ProgramFiles(x86)}\Google\Update\GoogleUpdate.exe",
             "${env:ProgramFiles}\Google\Update\GoogleUpdate.exe"
         )
         $googleUpdateExe = $googleUpdateExePaths | Where-Object { Test-Path $_ } | Select-Object -First 1
 
+        if (-not $googleUpdateExe) {
+            Write-Host "ERROR: GoogleUpdate.exe not found on the system." -ForegroundColor Red
+            Write-Host "Chrome auto-update cannot be enabled or run without Google Update services." -ForegroundColor Red
+            Write-Host "Please reinstall Chrome using the official installer to restore update functionality." -ForegroundColor Red
+            return $false
+        }
+
+        # Check and register/start Google Update services if missing
+        $services = @("gupdate", "gupdatem")
         foreach ($svcName in $services) {
             $svc = Get-Service -Name $svcName -ErrorAction SilentlyContinue
             if (-not $svc) {
-                Write-Host "Service '$svcName' not found."
-
-                if ($googleUpdateExe) {
-                    Write-Host "Found GoogleUpdate.exe at $googleUpdateExe. Attempting to register service '$svcName'..."
-                    try {
-                        Start-Process -FilePath $googleUpdateExe -ArgumentList "/svc" -Wait -NoNewWindow
-                        Write-Host "Service '$svcName' registration attempted."
-                        # Try to get the service again
-                        $svc = Get-Service -Name $svcName -ErrorAction SilentlyContinue
-                    } catch {
-                        Write-Host "Failed to register service '$svcName': $_" -ForegroundColor Yellow
-                    }
-                } else {
-                    Write-Host "GoogleUpdate.exe not found. Cannot register missing update services." -ForegroundColor Yellow
+                Write-Host "Service '$svcName' not found. Attempting to register via GoogleUpdate.exe..."
+                try {
+                    Start-Process -FilePath $googleUpdateExe -ArgumentList "/svc" -Wait -NoNewWindow
+                    Write-Host "Service '$svcName' registration attempted."
+                    $svc = Get-Service -Name $svcName -ErrorAction SilentlyContinue
+                } catch {
+                    Write-Host "Failed to register service '$svcName': $_" -ForegroundColor Yellow
                 }
             }
-
             if ($svc) {
                 if ($svc.StartType -ne "Automatic") {
                     Write-Host "Setting service '$svcName' to Automatic startup."
@@ -421,14 +421,41 @@ function application-Updates {
         }
 
         Write-Host "Chrome auto-update enabled."
+        return $true
     }
 
     function Enable-EdgeAutoUpdate {
-        # (Same as before, omitted here for brevity)
+        Write-Host "Enabling Edge Auto Update..."
+
+        $edgeUpdateKey = "HKLM:\SOFTWARE\Policies\Microsoft\EdgeUpdate"
+        if (-not (Test-Path $edgeUpdateKey)) {
+            New-Item -Path $edgeUpdateKey -Force | Out-Null
+        }
+        Set-ItemProperty -Path $edgeUpdateKey -Name "AutoUpdateCheckPeriodMinutes" -Value 60 -Type DWord
+        Set-ItemProperty -Path $edgeUpdateKey -Name "UpdateDefault" -Value 1 -Type DWord
+
+        # You can add Edge service checks similarly if needed
+
+        Write-Host "Edge auto-update enabled."
     }
 
     function Enable-FirefoxAutoUpdate {
-        # (Same as before, omitted here for brevity)
+        Write-Host "Enabling Firefox Auto Update..."
+
+        $firefoxProfilePath = "$env:APPDATA\Mozilla\Firefox\Profiles"
+        $profile = Get-ChildItem $firefoxProfilePath -Directory | Select-Object -First 1
+        if ($profile) {
+            $userJsPath = Join-Path $profile.FullName "user.js"
+            $prefsToSet = @(
+                'user_pref("app.update.enabled", true);',
+                'user_pref("app.update.auto", true);',
+                'user_pref("app.update.service.enabled", true);'
+            )
+            $prefsToSet | Out-File -FilePath $userJsPath -Encoding ASCII -Append
+            Write-Host "Enabled Firefox auto-update by modifying user.js"
+        } else {
+            Write-Host "Firefox profile not found; cannot enable auto-update." -ForegroundColor Yellow
+        }
     }
 
     try {
@@ -437,7 +464,11 @@ function application-Updates {
             "ChromeHTML" {
                 Write-Host "Detected default browser: Google Chrome"
 
-                Enable-ChromeAutoUpdate
+                $chromeEnabled = Enable-ChromeAutoUpdate
+                if (-not $chromeEnabled) {
+                    Write-Host "Skipping Chrome update check due to missing update services." -ForegroundColor Yellow
+                    return
+                }
 
                 $chromePaths = @(
                     "${env:ProgramFiles(x86)}\Google\Chrome\Application\chrome.exe",

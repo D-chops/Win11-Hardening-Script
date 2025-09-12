@@ -40,7 +40,6 @@ $menuOptions = @(
     "document the system",
     "enable updates",
     "user auditing",
-    "Admin Auditing",
     "Account-Policies",
     "Local Policies",
     "Defensive Countermeasures",
@@ -142,9 +141,8 @@ function Review-GroupMembers {
     Write-Host "`nReview complete for group: $GroupName" -ForegroundColor $ColorHeader
 }
 function User-Auditing {
-    Write-Host "`n--- Starting: User Auditing ---`n"
+    Write-Host "`n--- Starting: User and Admin Auditing ---`n"
 
-    # Loop through every local user account and prompt for authorization
     $localUsers = Get-LocalUser
 
     foreach ($user in $localUsers) {
@@ -162,6 +160,16 @@ function User-Auditing {
 
         if ($response -eq "" -or $response -match "^[Yy]$") {
             Write-Host "'$($user.Name)' marked as Authorized.`n"
+            # Ask if user should be upgraded to admin
+            $adminResponse = Read-Host "Should '$($user.Name)' be upgraded to Administrator? (Y/n) [Default: n]"
+            if ($adminResponse -match "^[Yy]$") {
+                try {
+                    Add-LocalGroupMember -Group "Administrators" -Member $user.Name -ErrorAction Stop
+                    Write-Host "'$($user.Name)' added to Administrators group." -ForegroundColor $ColorKept
+                } catch {
+                    Write-Host "Failed to add '$($user.Name)' to Administrators: $_" -ForegroundColor $ColorWarning
+                }
+            }
         } elseif ($response -match "^[Nn]$") {
             try {
                 Remove-LocalUser -Name $user.Name -ErrorAction Stop
@@ -180,16 +188,27 @@ function User-Auditing {
         $newUserName = Read-Host "Enter the new username"
         $newUserPassword = Read-Host "Enter the password for '$newUserName'"
         try {
-            New-LocalUser -Name $newUserName -Password (ConvertTo-SecureString $newUserPassword -AsPlainText -Force) -UserMayChangePassword $true -PasswordNeverExpires $false
+            New-LocalUser -Name $newUserName -Password (ConvertTo-SecureString $newUserPassword -AsPlainText -Force)
+            Set-LocalUser -Name $newUserName -UserMayChangePassword $true
+            Set-LocalUser -Name $newUserName -PasswordNeverExpires $false
             Write-Host "User '$newUserName' created successfully."
+            $newAdminResponse = Read-Host "Should '$newUserName' be upgraded to Administrator? (Y/n) [Default: n]"
+            if ($newAdminResponse -match "^[Yy]$") {
+                try {
+                    Add-LocalGroupMember -Group "Administrators" -Member $newUserName -ErrorAction Stop
+                    Write-Host "'$newUserName' added to Administrators group." -ForegroundColor $ColorKept
+                } catch {
+                    Write-Host "Failed to add '$newUserName' to Administrators: $_" -ForegroundColor $ColorWarning
+                }
+            }
         } catch {
             Write-Host "Failed to create user '$newUserName': $_"
         }
     }
 
+    # Set password for all users to $TempPassword and require change at next logon
     foreach ($user in $localUsers) {
         try {
-            # Set password to $TempPassword
             Set-LocalUser -Name $user.Name -Password (ConvertTo-SecureString $TempPassword -AsPlainText -Force)
             Set-LocalUser -Name $user.Name -PasswordNeverExpires $false
             Set-LocalUser -Name $user.Name -UserMayChangePassword $true
@@ -197,6 +216,7 @@ function User-Auditing {
             Write-Host "Failed to update password for '$($user.Name)': $_"
         }
     }
+    Write-Host "Passwords for all users set to temporary value and will require change at next logon."
 
     # Disable and rename Guest account
     try {
@@ -216,42 +236,18 @@ function User-Auditing {
         Write-Host "Failed to disable or rename Administrator account: $_"
     }
 
+    # Enforce password expiration and allow password change for all users
     $localUsers = Get-LocalUser
     foreach ($user in $localUsers) {
         try {
-        New-LocalUser -Name $newUserName -Password (ConvertTo-SecureString $newUserPassword -AsPlainText -Force)
-        # Set properties after creation
-        Set-LocalUser -Name $newUserName -UserMayChangePassword $true
-        Set-LocalUser -Name $newUserName -PasswordNeverExpires $false
-        Write-Host "User '$newUserName' created successfully."
-    } catch {
-        Write-Host "Failed to create user '$newUserName': $_"
+            Set-LocalUser -Name $user.Name -PasswordNeverExpires $false
+            Set-LocalUser -Name $user.Name -UserMayChangePassword $true
+        } catch {
+            Write-Host "Failed to update '$($user.Name)': $_"
+        }
     }
-    }
-    Write-Host "All users set: Password expires, User may change password."
-    Write-Host "Passwords for all users set to temporary value and will require change at next logon."
-    Write-Host "`n--- User Auditing Complete --"
-}
-
-function Admin-Auditing {
-    Write-Host "`n--- Starting: Admin Auditing ---`n"
-    Review-GroupMembers -GroupName 'Administrators'
-    Review-GroupMembers -GroupName 'Backup Operators'
-    Review-GroupMembers -GroupName 'Remote Management Users'
-    Review-GroupMembers -GroupName 'Event Log Readers'
-
-    # Loop through all users with Administrator permissions
-$adminGroup = Get-LocalGroupMember -Group 'Administrators'
-foreach ($admin in $adminGroup) {
-    $default = 'Y'
-    $prompt = "Is '$($admin.Name)' an Authorized Administrator? [Y/n]: "
-    $answer = Read-Host -Prompt $prompt
-    if ([string]::IsNullOrWhiteSpace($answer)) { $answer = $default }
-    if ($answer -match '^[Nn]$') {
-        Write-Host "Removing '$($admin.Name)' from Administrators group"
-        Remove-LocalGroupMember -Group 'Administrators' -Member $admin.Name
-    }
-}
+    Write-Host "All users set: Password expires, user may change password."
+    Write-Host "`n--- User and Admin Auditing Complete ---`n"
 }
 function Account-Policies {
     Write-Host "`n--- Starting: Account-Policies ---`n"
@@ -783,19 +779,18 @@ function application-Security-Settings {
         "1" { Document-System }
         "2" { Enable-Updates }
         "3" { User-Auditing }
-        "4" { Admin-Auditing }
-        "5" {account-Policies }
-        "6" {local-Policies }
-        "7" {defensive-Countermeasures }
-        "8" {uncategorized-OS-Settings }
-        "9" {service-Auditing }
-        "10" {os-Updates }
-        "11" {application-Updates }
-        "12" {prohibited-Files }
-        "13" {unwanted-Software }
-        "14" {malware }
-        "15" {application-Security-Settings }
-        "16" { Write-Host "`nExiting..."; break menu }  # leave the do{} loop
+        "4" {account-Policies }
+        "5" {local-Policies }
+        "6" {defensive-Countermeasures }
+        "7" {uncategorized-OS-Settings }
+        "8" {service-Auditing }
+        "9" {os-Updates }
+        "10" {application-Updates }
+        "11" {prohibited-Files }
+        "12" {unwanted-Software }
+        "13" {malware }
+        "14" {application-Security-Settings }
+        "15" { Write-Host "`nExiting..."; break menu }  # leave the do{} loop
         default { Write-Host "`nInvalid selection. Please try again." }
     }
 } while ($true)

@@ -798,9 +798,9 @@ function unwanted-Software {
                 $installedSoftware += $items
             }
         }
-        catch {
-            Write-Host "Failed to read registry path $path: $($_)"
-        }
+      catch {
+    Write-Host "Failed to read registry path "${path}:"$_"
+   }
     }
 
     # Filter installed software for unwanted items

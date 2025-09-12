@@ -368,6 +368,35 @@ function os-Updates {
 function application-Updates {
     Write-Host "`n--- Starting: Application Updates (Default Browser) ---`n"
 
+    # Prompt user to select default browser or press Enter to auto-detect
+    $browserChoice = Read-Host "Enter default browser (chrome / edge / firefox) or press Enter to auto-detect"
+
+    if (-not $browserChoice) {
+        # Auto-detect default browser from registry
+        try {
+            $browserProgId = (Get-ItemProperty "HKCU:\Software\Microsoft\Windows\Shell\Associations\UrlAssociations\http\UserChoice").ProgId
+            switch ($browserProgId) {
+                "ChromeHTML" { $browser = "chrome" }
+                "MSEdgeHTM" { $browser = "edge" }
+                "FirefoxURL" { $browser = "firefox" }
+                default { $browser = $null }
+            }
+            if (-not $browser) {
+                Write-Host "Could not auto-detect default browser." -ForegroundColor Yellow
+                return
+            }
+        } catch {
+            Write-Host "Error detecting default browser: $_" -ForegroundColor Yellow
+            return
+        }
+    } else {
+        $browser = $browserChoice.ToLower()
+        if ($browser -notin @("chrome", "edge", "firefox")) {
+            Write-Host "Invalid browser choice. Please run the script again." -ForegroundColor Red
+            return
+        }
+    }
+
     # Helper function to download and silently install a browser
     function Download-And-Install($url, $installerPath, $silentArgs) {
         Write-Host "Downloading installer from $url..."
@@ -382,7 +411,8 @@ function application-Updates {
         }
     }
 
-    # Reinstall Chrome if GoogleUpdate.exe is missing
+    # Functions to reinstall browsers if missing, enable auto update, and run update checks
+
     function Reinstall-ChromeIfMissing {
         $googleUpdatePaths = @(
             "${env:ProgramFiles(x86)}\Google\Update\GoogleUpdate.exe",
@@ -392,21 +422,27 @@ function application-Updates {
 
         if (-not $googleUpdateExe) {
             Write-Host "GoogleUpdate.exe missing. Reinstalling Chrome silently..."
-
             $chromeInstallerUrl = "https://dl.google.com/chrome/install/latest/chrome_installer.exe"
             $tempInstallerPath = "$env:TEMP\chrome_installer.exe"
             $silentArgs = "/silent /install"
-
             Download-And-Install -url $chromeInstallerUrl -installerPath $tempInstallerPath -silentArgs $silentArgs
-
-            # Wait a bit for installation to register services/files
             Start-Sleep -Seconds 10
         } else {
             Write-Host "GoogleUpdate.exe found. No reinstall needed."
         }
     }
 
-    # Reinstall Edge if missing (simplified check for msedge.exe)
+    function Enable-ChromeAutoUpdate {
+        Write-Host "Enabling Chrome auto-update..."
+        $chromeUpdateKey = "HKLM:\SOFTWARE\Policies\Google\Update"
+        if (-not (Test-Path $chromeUpdateKey)) {
+            New-Item -Path $chromeUpdateKey -Force | Out-Null
+        }
+        Set-ItemProperty -Path $chromeUpdateKey -Name "AutoUpdateCheckPeriodMinutes" -Value 60 -Type DWord
+        Set-ItemProperty -Path $chromeUpdateKey -Name "UpdateDefault" -Value 1 -Type DWord
+        Write-Host "Chrome auto-update enabled."
+    }
+
     function Reinstall-EdgeIfMissing {
         $edgePaths = @(
             "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe",
@@ -416,20 +452,27 @@ function application-Updates {
 
         if (-not $edgeExe) {
             Write-Host "Microsoft Edge missing. Reinstalling silently..."
-
             $edgeInstallerUrl = "https://msedge.sf.dl.delivery.mp.microsoft.com/filestreamingservice/files/6e8c228f-c7e0-4e9b-a1a9-f8b3e7a003f1/MicrosoftEdgeEnterpriseX64.msi"
             $tempInstallerPath = "$env:TEMP\MicrosoftEdgeEnterpriseX64.msi"
             $silentArgs = "/quiet /norestart"
-
             Download-And-Install -url $edgeInstallerUrl -installerPath $tempInstallerPath -silentArgs $silentArgs
-
             Start-Sleep -Seconds 10
         } else {
             Write-Host "Microsoft Edge found. No reinstall needed."
         }
     }
 
-    # Reinstall Firefox if missing
+    function Enable-EdgeAutoUpdate {
+        Write-Host "Enabling Edge auto-update..."
+        $edgeUpdateKey = "HKLM:\SOFTWARE\Policies\Microsoft\EdgeUpdate"
+        if (-not (Test-Path $edgeUpdateKey)) {
+            New-Item -Path $edgeUpdateKey -Force | Out-Null
+        }
+        Set-ItemProperty -Path $edgeUpdateKey -Name "AutoUpdateCheckPeriodMinutes" -Value 60 -Type DWord
+        Set-ItemProperty -Path $edgeUpdateKey -Name "UpdateDefault" -Value 1 -Type DWord
+        Write-Host "Edge auto-update enabled."
+    }
+
     function Reinstall-FirefoxIfMissing {
         $firefoxPaths = @(
             "${env:ProgramFiles}\Mozilla Firefox\firefox.exe",
@@ -439,120 +482,18 @@ function application-Updates {
 
         if (-not $firefoxExe) {
             Write-Host "Mozilla Firefox missing. Reinstalling silently..."
-
             $firefoxInstallerUrl = "https://download.mozilla.org/?product=firefox-latest&os=win64&lang=en-US"
             $tempInstallerPath = "$env:TEMP\FirefoxInstaller.exe"
             $silentArgs = "-ms"
-
             Download-And-Install -url $firefoxInstallerUrl -installerPath $tempInstallerPath -silentArgs $silentArgs
-
             Start-Sleep -Seconds 10
         } else {
             Write-Host "Mozilla Firefox found. No reinstall needed."
         }
     }
 
-    try {
-        $browserProgId = (Get-ItemProperty "HKCU:\Software\Microsoft\Windows\Shell\Associations\UrlAssociations\http\UserChoice").ProgId
-
-        switch ($browserProgId) {
-            "ChromeHTML" {
-                Write-Host "Detected default browser: Google Chrome"
-                Reinstall-ChromeIfMissing
-            }
-            "MSEdgeHTM" {
-                Write-Host "Detected default browser: Microsoft Edge"
-                Reinstall-EdgeIfMissing
-            }
-            "FirefoxURL" {
-                Write-Host "Detected default browser: Mozilla Firefox"
-                Reinstall-FirefoxIfMissing
-            }
-            default {
-                Write-Host "Default browser not recognized or not supported for reinstall." -ForegroundColor Yellow
-            }
-        }
-    } catch {
-        Write-Host "Could not detect default browser: $_" -ForegroundColor Yellow
-    }
-
-    # ... Continue with your existing enabling auto-update and update check logic here
-
-    # (Paste your existing Enable-ChromeAutoUpdate, Enable-EdgeAutoUpdate, Enable-FirefoxAutoUpdate functions here and main switch-case to enable + run update checks)
-    function Enable-ChromeAutoUpdate {
-        Write-Host "Enabling Chrome Auto Update..."
-
-        $chromeUpdateKey = "HKLM:\SOFTWARE\Policies\Google\Update"
-        if (-not (Test-Path $chromeUpdateKey)) {
-            New-Item -Path $chromeUpdateKey -Force | Out-Null
-        }
-        Set-ItemProperty -Path $chromeUpdateKey -Name "AutoUpdateCheckPeriodMinutes" -Value 60 -Type DWord
-        Set-ItemProperty -Path $chromeUpdateKey -Name "UpdateDefault" -Value 1 -Type DWord
-
-        # Check if Google Update executable exists
-        $googleUpdateExePaths = @(
-            "${env:ProgramFiles(x86)}\Google\Update\GoogleUpdate.exe",
-            "${env:ProgramFiles}\Google\Update\GoogleUpdate.exe"
-        )
-        $googleUpdateExe = $googleUpdateExePaths | Where-Object { Test-Path $_ } | Select-Object -First 1
-
-        if (-not $googleUpdateExe) {
-            Write-Host "ERROR: GoogleUpdate.exe not found on the system." -ForegroundColor Red
-            Write-Host "Chrome auto-update cannot be enabled or run without Google Update services." -ForegroundColor Red
-            Write-Host "Please reinstall Chrome using the official installer to restore update functionality." -ForegroundColor Red
-            return $false
-        }
-
-        # Check and register/start Google Update services if missing
-        $services = @("gupdate", "gupdatem")
-        foreach ($svcName in $services) {
-            $svc = Get-Service -Name $svcName -ErrorAction SilentlyContinue
-            if (-not $svc) {
-                Write-Host "Service '$svcName' not found. Attempting to register via GoogleUpdate.exe..."
-                try {
-                    Start-Process -FilePath $googleUpdateExe -ArgumentList "/svc" -Wait -NoNewWindow
-                    Write-Host "Service '$svcName' registration attempted."
-                    $svc = Get-Service -Name $svcName -ErrorAction SilentlyContinue
-                } catch {
-                    Write-Host "Failed to register service '$svcName': $_" -ForegroundColor Yellow
-                }
-            }
-            if ($svc) {
-                if ($svc.StartType -ne "Automatic") {
-                    Write-Host "Setting service '$svcName' to Automatic startup."
-                    Set-Service -Name $svcName -StartupType Automatic
-                }
-                if ($svc.Status -ne "Running") {
-                    Write-Host "Starting service '$svcName'."
-                    Start-Service -Name $svcName
-                } else {
-                    Write-Host "Service '$svcName' is already running."
-                }
-            }
-        }
-
-        Write-Host "Chrome auto-update enabled."
-        return $true
-    }
-
-    function Enable-EdgeAutoUpdate {
-        Write-Host "Enabling Edge Auto Update..."
-
-        $edgeUpdateKey = "HKLM:\SOFTWARE\Policies\Microsoft\EdgeUpdate"
-        if (-not (Test-Path $edgeUpdateKey)) {
-            New-Item -Path $edgeUpdateKey -Force | Out-Null
-        }
-        Set-ItemProperty -Path $edgeUpdateKey -Name "AutoUpdateCheckPeriodMinutes" -Value 60 -Type DWord
-        Set-ItemProperty -Path $edgeUpdateKey -Name "UpdateDefault" -Value 1 -Type DWord
-
-        # You can add Edge service checks similarly if needed
-
-        Write-Host "Edge auto-update enabled."
-    }
-
     function Enable-FirefoxAutoUpdate {
-        Write-Host "Enabling Firefox Auto Update..."
-
+        Write-Host "Enabling Firefox auto-update..."
         $firefoxProfilePath = "$env:APPDATA\Mozilla\Firefox\Profiles"
         $profile = Get-ChildItem $firefoxProfilePath -Directory | Select-Object -First 1
         if ($profile) {
@@ -562,79 +503,82 @@ function application-Updates {
                 'user_pref("app.update.auto", true);',
                 'user_pref("app.update.service.enabled", true);'
             )
-            $prefsToSet | Out-File -FilePath $userJsPath -Encoding ASCII -Append
-            Write-Host "Enabled Firefox auto-update by modifying user.js"
+            if (-not (Test-Path $userJsPath)) {
+                $prefsToSet | Out-File -FilePath $userJsPath -Encoding ASCII
+            } else {
+                $existingContent = Get-Content $userJsPath
+                foreach ($pref in $prefsToSet) {
+                    if ($existingContent -notcontains $pref) {
+                        Add-Content -Path $userJsPath -Value $pref
+                    }
+                }
+            }
+            Write-Host "Firefox auto-update preferences set in user.js."
         } else {
             Write-Host "Firefox profile not found; cannot enable auto-update." -ForegroundColor Yellow
         }
     }
 
-    try {
-        $browserProgId = (Get-ItemProperty "HKCU:\Software\Microsoft\Windows\Shell\Associations\UrlAssociations\http\UserChoice").ProgId
-        switch ($browserProgId) {
-            "ChromeHTML" {
-                Write-Host "Detected default browser: Google Chrome"
+    switch ($browser) {
+        "chrome" {
+            Write-Host "Processing Google Chrome..."
+            Reinstall-ChromeIfMissing
+            Enable-ChromeAutoUpdate
 
-                $chromeEnabled = Enable-ChromeAutoUpdate
-                if (-not $chromeEnabled) {
-                    Write-Host "Skipping Chrome update check due to missing update services." -ForegroundColor Yellow
-                    return
-                }
-
-                $chromePaths = @(
-                    "${env:ProgramFiles(x86)}\Google\Chrome\Application\chrome.exe",
-                    "${env:ProgramFiles}\Google\Chrome\Application\chrome.exe"
-                )
-                $chromePath = $chromePaths | Where-Object { Test-Path $_ } | Select-Object -First 1
-                if ($chromePath) {
-                    Write-Host "Running Chrome update check..."
-                    Start-Process -FilePath $chromePath -ArgumentList "--check-for-update-interval=1" -WindowStyle Hidden
-                } else {
-                    Write-Host "Chrome executable not found." -ForegroundColor Yellow
-                }
-            }
-            "MSEdgeHTM" {
-                Write-Host "Detected default browser: Microsoft Edge"
-                Enable-EdgeAutoUpdate
-
-                $edgePaths = @(
-                    "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe",
-                    "${env:ProgramFiles}\Microsoft\Edge\Application\msedge.exe"
-                )
-                $edgePath = $edgePaths | Where-Object { Test-Path $_ } | Select-Object -First 1
-                if ($edgePath) {
-                    Write-Host "Running Edge update check..."
-                    Start-Process -FilePath $edgePath -ArgumentList "--check-for-update-interval=1" -WindowStyle Hidden
-                } else {
-                    Write-Host "Edge executable not found." -ForegroundColor Yellow
-                }
-            }
-            "FirefoxURL" {
-                Write-Host "Detected default browser: Mozilla Firefox"
-                Enable-FirefoxAutoUpdate
-
-                $firefoxPaths = @(
-                    "${env:ProgramFiles}\Mozilla Firefox\firefox.exe",
-                    "${env:ProgramFiles(x86)}\Mozilla Firefox\firefox.exe"
-                )
-                $firefoxPath = $firefoxPaths | Where-Object { Test-Path $_ } | Select-Object -First 1
-                if ($firefoxPath) {
-                    Write-Host "Running Firefox update check..."
-                    Start-Process -FilePath $firefoxPath -ArgumentList "-headless -update" -WindowStyle Hidden
-                } else {
-                    Write-Host "Firefox executable not found." -ForegroundColor Yellow
-                }
-            }
-            default {
-                Write-Host "Default browser not recognized or not supported for auto-update." -ForegroundColor Yellow
+            $chromePaths = @(
+                "${env:ProgramFiles(x86)}\Google\Chrome\Application\chrome.exe",
+                "${env:ProgramFiles}\Google\Chrome\Application\chrome.exe"
+            )
+            $chromePath = $chromePaths | Where-Object { Test-Path $_ } | Select-Object -First 1
+            if ($chromePath) {
+                Write-Host "Running Chrome update check..."
+                Start-Process -FilePath $chromePath -ArgumentList "--check-for-update-interval=1" -WindowStyle Hidden
+            } else {
+                Write-Host "Chrome executable not found." -ForegroundColor Yellow
             }
         }
-    } catch {
-        Write-Host "Could not detect default browser or run update: $_" -ForegroundColor Yellow
+        "edge" {
+            Write-Host "Processing Microsoft Edge..."
+            Reinstall-EdgeIfMissing
+            Enable-EdgeAutoUpdate
+
+            $edgePaths = @(
+                "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe",
+                "${env:ProgramFiles}\Microsoft\Edge\Application\msedge.exe"
+            )
+            $edgePath = $edgePaths | Where-Object { Test-Path $_ } | Select-Object -First 1
+            if ($edgePath) {
+                Write-Host "Running Edge update check..."
+                Start-Process -FilePath $edgePath -ArgumentList "--check-for-update-interval=1" -WindowStyle Hidden
+            } else {
+                Write-Host "Edge executable not found." -ForegroundColor Yellow
+            }
+        }
+        "firefox" {
+            Write-Host "Processing Mozilla Firefox..."
+            Reinstall-FirefoxIfMissing
+            Enable-FirefoxAutoUpdate
+
+            $firefoxPaths = @(
+                "${env:ProgramFiles}\Mozilla Firefox\firefox.exe",
+                "${env:ProgramFiles(x86)}\Mozilla Firefox\firefox.exe"
+            )
+            $firefoxPath = $firefoxPaths | Where-Object { Test-Path $_ } | Select-Object -First 1
+            if ($firefoxPath) {
+                Write-Host "Running Firefox update check..."
+                Start-Process -FilePath $firefoxPath -ArgumentList "-headless -update" -WindowStyle Hidden
+            } else {
+                Write-Host "Firefox executable not found." -ForegroundColor Yellow
+            }
+        }
+        default {
+            Write-Host "Unsupported browser choice." -ForegroundColor Red
+        }
     }
 
     Write-Host "`n--- Application Updates Complete ---`n"
 }
+
 
 
 function prohibited-Files {

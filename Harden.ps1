@@ -236,11 +236,11 @@ function User-Auditing {
             }
         }
             Write-Host "Failed to update '$($user.Name)': $_"
-}
     }
     Write-Host "All users set: Password expires, User may change password."
     Write-Host "Passwords for all users set to temporary value and will require change at next logon."
     Write-Host "`n--- User Auditing Complete --"
+}
 }
 
 

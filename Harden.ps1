@@ -144,10 +144,9 @@ function Review-GroupMembers {
 function User-Auditing {
     Write-Host "`n--- Starting: User Auditing ---`n"
 
-
-        # Loop through every local user account and prompt for authorization
+    # Loop through every local user account and prompt for authorization
     $localUsers = Get-LocalUser
-    
+
     foreach ($user in $localUsers) {
         # Skip system/built-in/current accounts
         if (
@@ -157,10 +156,10 @@ function User-Auditing {
             Write-Host "Skipping system or currently logged-in account: $($user.Name)"
             continue
         }
-    
+
         # Prompt for authorization
         $response = Read-Host "Is '$($user.Name)' an Authorized User? (Y/n) [Default: Y]"
-    
+
         if ($response -eq "" -or $response -match "^[Yy]$") {
             Write-Host "'$($user.Name)' marked as Authorized.`n"
         } elseif ($response -match "^[Nn]$") {
@@ -174,14 +173,28 @@ function User-Auditing {
             Write-Host "Invalid input. Skipping user '$($user.Name)'.`n"
         }
     }
-   foreach ($user in $localUsers) {
+
+    # Option to add a new user at the end
+    $addUserResponse = Read-Host "Would you like to add a new local user? (Y/n) [Default: N]"
+    if ($addUserResponse -match "^[Yy]$") {
+        $newUserName = Read-Host "Enter the new username"
+        $newUserPassword = Read-Host "Enter the password for '$newUserName'"
+        try {
+            New-LocalUser -Name $newUserName -Password (ConvertTo-SecureString $newUserPassword -AsPlainText -Force) -UserMayChangePassword $true -PasswordNeverExpires $false
+            Write-Host "User '$newUserName' created successfully."
+        } catch {
+            Write-Host "Failed to create user '$newUserName': $_"
+        }
+    }
+
+    foreach ($user in $localUsers) {
         try {
             # Set password to $TempPassword
             Set-LocalUser -Name $user.Name -Password (ConvertTo-SecureString $TempPassword -AsPlainText -Force)
             Set-LocalUser -Name $user.Name -PasswordNeverExpires $false
             Set-LocalUser -Name $user.Name -UserMayChangePassword $true
         } catch {
-           Write-Host "Failed to update password for '$($user.Name)': $_"
+            Write-Host "Failed to update password for '$($user.Name)': $_"
         }
     }
 
@@ -203,22 +216,25 @@ function User-Auditing {
         Write-Host "Failed to disable or rename Administrator account: $_"
     }
 
-   $localUsers = Get-LocalUser
-foreach ($user in $localUsers) {
-    try {
-        # Ensure password expires
-        Set-LocalUser -Name $user.Name -PasswordNeverExpires $false
-        # Ensure user can change password
-        Set-LocalUser -Name $user.Name -UserMayChangePassword $true
-    } catch {
-        Write-Host "Failed to update '$($user.Name)': $_"
+    $localUsers = Get-LocalUser
+    foreach ($user in $localUsers) {
+        try {
+            # Ensure password expires
+            Set-LocalUser -Name $user.Name -PasswordNeverExpires $false
+            # Ensure user can change password
+            Set-LocalUser -Name $user.Name -UserMayChangePassword $true
+        } catch {
+            Write-Host "Failed to update '$($user.Name)': $_"
+        }
     }
+    Write-Host "All users set: Password expires, User may change password."
+    Write-Host "Passwords for all users set to temporary value and will require change at next logon."
+    Write-Host "`n--- User Auditing Complete --"
 }
-Write-Host "All users set: Password expires, User may change password."
-Write-Host "Passwords for all users set to temporary value and will require change at next logon."
-    
-    Write-Host "`n--- User Auditing Complete ---`n"
-}
+
+
+
+
 function Admin-Auditing {
     Write-Host "`n--- Starting: Admin Auditing ---`n"
     Review-GroupMembers -GroupName 'Administrators'

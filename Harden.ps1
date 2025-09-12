@@ -433,47 +433,53 @@ function application-Updates {
     }
 
     function Enable-ChromeAutoUpdate {
-        Write-Host "Enabling Chrome auto-update..."
+    Write-Host "Enabling Chrome auto-update..."
 
-        # Define the registry paths for 64-bit and 32-bit views
-        $chromeUpdateKeys = @(
-            "HKLM:\SOFTWARE\Policies\Google\Update",
-            "HKLM:\SOFTWARE\WOW6432Node\Google\Update"
-        )
+    $chromeUpdateKeys = @(
+        "HKLM:\SOFTWARE\Policies\Google\Update",
+        "HKLM:\SOFTWARE\WOW6432Node\Google\Update"
+    )
 
-        foreach ($key in $chromeUpdateKeys) {
-            if (-not (Test-Path $key)) {
-                New-Item -Path $key -Force | Out-Null
-            }
-            
-            # Set update policies
-            Set-ItemProperty -Path $key -Name "AutoUpdateCheckPeriodMinutes" -Value 60 -Type DWord
-            Set-ItemProperty -Path $key -Name "UpdateDefault" -Value 1 -Type DWord
-            Set-ItemProperty -Path $key -Name "UpdatePolicyOverride" -Value 0 -Type DWord
-            Set-ItemProperty -Path $key -Name "DisableAutoUpdateChecksCheckboxValue" -Value 0 -Type DWord
+    foreach ($key in $chromeUpdateKeys) {
+        if (-not (Test-Path $key)) {
+            New-Item -Path $key -Force | Out-Null
         }
 
-        # Ensure the Google Update services are running ('gupdate' and 'gupdatem')
-        $services = @("gupdate", "gupdatem")
-
-        foreach ($svc in $services) {
-            $service = Get-Service -Name $svc -ErrorAction SilentlyContinue
-            if ($service) {
-                if ($service.Status -ne 'Running') {
-                    Write-Host "Starting service $svc ..."
-                    Start-Service $svc
-                } else {
-                    Write-Host "Service $svc is already running."
-                }
-                # Set startup type to automatic if not already
-                Set-Service -Name $svc -StartupType Automatic
-            } else {
-                Write-Host "Service $svc not found; Google Update may not be installed properly." -ForegroundColor Yellow
-            }
-        }
-
-        Write-Host "Chrome auto-update enabled."
+        # Allow updates
+        Set-ItemProperty -Path $key -Name "UpdateDefault" -Value 1 -Type DWord
+        Set-ItemProperty -Path $key -Name "AutoUpdateCheckPeriodMinutes" -Value 60 -Type DWord
     }
+
+    # Ensure update services are running
+    $services = @("gupdate", "gupdatem")
+    foreach ($svc in $services) {
+        $service = Get-Service -Name $svc -ErrorAction SilentlyContinue
+        if ($service) {
+            if ($service.Status -ne 'Running') {
+                Write-Host "Starting service $svc ..."
+                Start-Service $svc
+            }
+            Set-Service -Name $svc -StartupType Automatic
+        } else {
+            Write-Host "Service $svc not found. Chrome updater may be broken." -ForegroundColor Yellow
+        }
+    }
+
+    # Ensure scheduled tasks exist
+    $tasks = @("GoogleUpdateTaskMachineUA", "GoogleUpdateTaskMachineCore")
+    foreach ($task in $tasks) {
+        $taskObj = Get-ScheduledTask -TaskName $task -ErrorAction SilentlyContinue
+        if ($taskObj) {
+            Enable-ScheduledTask -TaskName $task
+            Write-Host "Scheduled Task $task is enabled."
+        } else {
+            Write-Host "Scheduled Task $task not found." -ForegroundColor Yellow
+        }
+    }
+
+    Write-Host "Chrome auto-update configuration complete."
+}
+
 
     function Reinstall-EdgeIfMissing {
         $edgePaths = @(

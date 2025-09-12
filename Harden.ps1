@@ -222,7 +222,7 @@ function User-Auditing {
             # Ensure password expires
             Set-LocalUser -Name $user.Name -PasswordNeverExpires $false
             # Ensure user can change password.
-        if ($addUserResponse -match "^[Yy]$") {
+        if ($addUserResponse -match "^[Yy]$") 
             $newUserName = Read-Host "Enter the new username"
             $newUserPassword = Read-Host "Enter the password for '$newUserName'"
             try {
@@ -234,13 +234,12 @@ function User-Auditing {
             } catch {
                 Write-Host "Failed to create user '$newUserName': $_"
             }
-        }
             Write-Host "Failed to update '$($user.Name)': $_"
     Write-Host "All users set: Password expires, User may change password."
     Write-Host "Passwords for all users set to temporary value and will require change at next logon."
     Write-Host "`n--- User Auditing Complete --"
 }
-}
+    }
 }
 
 

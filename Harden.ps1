@@ -389,7 +389,6 @@ function Local-Policies {
 
     Write-Host "`n--- Defensive Countermeasures Complete ---`n"
 }
-}
 
 
 function Uncategorized-OS-Settings {

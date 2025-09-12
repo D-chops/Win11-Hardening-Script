@@ -307,9 +307,61 @@ function local-Policies {
         function defensive-Countermeasures {
     Write-Host "`n--- Starting: Defensive Countermeasures ---`n"
 }
-function uncategorized-OS-Settings {
+function Uncategorized-OS-Settings {
     Write-Host "`n--- Starting: Uncategorized OS Settings ---`n"
+
+    # Option 1: Disable file sharing on C: drive
+    $disableSharing = Read-Host "Would you like to disable file sharing for the C: drive? (Y/n) [Default: n]"
+    if ($disableSharing -match "^[Yy]$") {
+        try {
+            # Remove any existing shares for C: drive (e.g. "C$", "C")
+            $shares = Get-WmiObject -Class Win32_Share | Where-Object { $_.Path -like "C:\*" }
+            foreach ($share in $shares) {
+                Write-Host "Removing share: $($share.Name) for path $($share.Path)"
+                $result = (Get-WmiObject -Class Win32_Share -Filter "Name='$($share.Name)'").Delete()
+                if ($result.ReturnValue -eq 0) {
+                    Write-Host "Successfully removed share $($share.Name)."
+                } else {
+                    Write-Host "Failed to remove share $($share.Name). Return code: $($result.ReturnValue)" -ForegroundColor Yellow
+                }
+            }
+
+            # Alternatively, disable file sharing on C: via firewall rule
+            # Block SMB inbound connections on C: (optional, if needed)
+
+            Write-Host "File sharing for C: drive disabled (shares removed)."
+        } catch {
+            Write-Host "Error disabling file sharing: $_" -ForegroundColor Red
+        }
+    } else {
+        Write-Host "Skipping disabling file sharing for C: drive."
+    }
+
+    # Option 2: Disable Remote Assistance connections
+    $disableRA = Read-Host "Would you like to disable Remote Assistance connections? (Y/n) [Default: n]"
+    if ($disableRA -match "^[Yy]$") {
+        try {
+            # Disable Remote Assistance via registry (both invitations and solicited)
+            $regPath = "HKLM:\SYSTEM\CurrentControlSet\Control\Remote Assistance"
+            if (-not (Test-Path $regPath)) {
+                New-Item -Path $regPath -Force | Out-Null
+            }
+
+            Set-ItemProperty -Path $regPath -Name "fAllowToGetHelp" -Value 0 -Type DWord
+            Set-ItemProperty -Path $regPath -Name "fAllowFullControl" -Value 0 -Type DWord
+            Set-ItemProperty -Path $regPath -Name "fAllowUnsolicited" -Value 0 -Type DWord
+
+            Write-Host "Remote Assistance connections have been disabled."
+        } catch {
+            Write-Host "Error disabling Remote Assistance: $_" -ForegroundColor Red
+        }
+    } else {
+        Write-Host "Skipping disabling Remote Assistance."
+    }
+
+    Write-Host "`n--- Uncategorized OS Settings Complete ---`n"
 }
+
 function service-Auditing {
     Write-Host "`n--- Starting: Service Auditing ---`n"
         # Array of services to disable for security

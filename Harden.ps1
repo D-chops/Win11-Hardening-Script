@@ -754,6 +754,20 @@ function unwanted-Software {
     )
 
     # Helper function to uninstall software by uninstall string
+ function unwanted-Software {
+    Write-Host "`n--- Starting: Unwanted Software Scan ---`n"
+
+    # List of unwanted software display names (add as needed)
+    $unwantedSoftwareList = @(
+        "Angry IP Scanner",
+        "Some Other Unwanted App",
+        "Example Tool"
+    )
+
+    # Path to the "Everything" app folder
+    $everythingPath = "C:\inetpub\ftproot\everything"
+
+    # Helper function to uninstall software by uninstall string
     function Uninstall-Software {
         param (
             [string]$UninstallString,
@@ -806,24 +820,46 @@ function unwanted-Software {
         }
     }
 
-    if ($foundUnwanted.Count -eq 0) {
-        Write-Host "No unwanted software found."
+    # Check if "Everything" folder exists
+    $everythingExists = Test-Path -Path $everythingPath
+
+    if ($everythingExists) {
+        Write-Host "Found folder: Everything app at $everythingPath"
+    }
+
+    # If nothing found and no folder, exit
+    if ($foundUnwanted.Count -eq 0 -and -not $everythingExists) {
+        Write-Host "No unwanted software or folders found."
         return
     }
 
-    Write-Host "Found the following unwanted software:"
-    $foundUnwanted | ForEach-Object { Write-Host "- $($_.DisplayName)" }
+    # Show found unwanted software
+    if ($foundUnwanted.Count -gt 0) {
+        Write-Host "Found the following unwanted software:"
+        $foundUnwanted | ForEach-Object { Write-Host "- $($_.DisplayName)" }
+    }
 
-    # Ask if user wants to uninstall all at once or prompt individually
-    $choice = Read-Host "Type 'all' to uninstall everything automatically, 'prompt' to uninstall one by one, or 'no' to cancel [all/prompt/no] (default: prompt)"
+    # Ask user for action
+    $choice = Read-Host "Type 'all' to uninstall everything and delete folders automatically, 'prompt' to uninstall one by one, or 'no' to cancel [all/prompt/no] (default: prompt)"
 
     switch ($choice.ToLower()) {
         "all" {
+            # Uninstall all software found
             foreach ($app in $foundUnwanted) {
                 Uninstall-Software -UninstallString $app.UninstallString -DisplayName $app.DisplayName
             }
+            # Delete the Everything folder if found
+            if ($everythingExists) {
+                try {
+                    Remove-Item -Path $everythingPath -Recurse -Force
+                    Write-Host "Deleted folder: $everythingPath"
+                } catch {
+                    Write-Host "Failed to delete ${everythingPath}: $_"
+                }
+            }
         }
         "prompt" {
+            # Prompt for uninstalling each software
             foreach ($app in $foundUnwanted) {
                 $answer = Read-Host "Uninstall $($app.DisplayName)? (Y/n)"
                 if ($answer -match '^[Yy]$') {
@@ -832,14 +868,30 @@ function unwanted-Software {
                     Write-Host "Skipped $($app.DisplayName)."
                 }
             }
+            # Prompt for deleting the Everything folder
+            if ($everythingExists) {
+                $deleteFolder = Read-Host "Delete folder Everything at $everythingPath? (Y/n)"
+                if ($deleteFolder -match '^[Yy]$') {
+                    try {
+                        Remove-Item -Path $everythingPath -Recurse -Force
+                        Write-Host "Deleted folder: $everythingPath"
+                    } catch {
+                        Write-Host "Failed to delete $everythingPath: $_"
+                    }
+                } else {
+                    Write-Host "Skipped deleting $everythingPath."
+                }
+            }
         }
         default {
-            Write-Host "Uninstallation cancelled."
+            Write-Host "Operation cancelled."
         }
     }
 
     Write-Host "`n--- Unwanted Software Scan Complete ---`n"
 }
+}
+
 
 function malware {
     Write-Host "`n--- Starting: Malware ---`n"

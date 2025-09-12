@@ -876,7 +876,7 @@ function unwanted-Software {
                         Remove-Item -Path $everythingPath -Recurse -Force
                         Write-Host "Deleted folder: $everythingPath"
                     } catch {
-                        Write-Host "Failed to delete $everythingPath: $_"
+                        Write-Host "Failed to delete ${everythingPath}: $_"
                     }
                 } else {
                     Write-Host "Skipped deleting $everythingPath."

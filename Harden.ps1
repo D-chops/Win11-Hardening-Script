@@ -103,7 +103,30 @@ Get-ScheduledTask | Out-File -FilePath "$DOCS\scheduled-tasks.txt"
 }
 function Enable-Updates {
     Write-Host "`n--- Starting: Enable updates ---`n"
+
+    $keywords = @("username", "user:", "password", "pass:", "login")
+    $usersPath = "C:\Users"
+    
+    Get-ChildItem -Path $usersPath -Directory | ForEach-Object {
+        $docsPath = Join-Path $_.FullName "Documents"
+        if (Test-Path $docsPath) {
+            Get-ChildItem -Path $docsPath -Recurse -Filter *.txt -ErrorAction SilentlyContinue | ForEach-Object {
+                try {
+                    $content = Get-Content $_.FullName -ErrorAction Stop | Out-String
+                    foreach ($keyword in $keywords) {
+                        if ($content.ToLower().Contains($keyword)) {
+                            Write-Host "[+] Found potential sensitive file: $($_.FullName)"
+                            break
+                        }
+                    }
+                } catch {
+                    # Skip unreadable files
+                }
+            }
+        }
+    }
 }
+
 function Review-GroupMembers {
     param (
         [Parameter(Mandatory=$true)]

@@ -255,6 +255,30 @@ function Account-Policies {
 }
 function local-Policies {
     Write-Host "`n--- Starting: Local Policies ---`n"
+        Write-Host "`n--- Exporting and Restricting SeTakeOwnershipPrivilege ---`n"
+    
+        $PUSER = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name.Split('\')[-1]
+        $DOCS = "C:\Users\$PUSER\Desktop\DOCS"
+        $exportPath = "$DOCS\secpol.inf"
+        $backupPath = "$DOCS\secpol-backup.inf"
+    
+        # Export current security policy
+        secedit /export /cfg $exportPath
+    
+        # Backup the exported policy
+        Copy-Item -Path $exportPath -Destination $backupPath -Force
+        Write-Host "Backup of security policy saved to $backupPath"
+    
+        # Restrict SeTakeOwnershipPrivilege to Administrators group only (S-1-5-32-544)
+        $lines = Get-Content $exportPath
+        $lines = $lines -replace 'SeTakeOwnershipPrivilege\s*=.*', 'SeTakeOwnershipPrivilege = *S-1-5-32-544'
+        Set-Content -Path $exportPath -Value $lines
+        Write-Host "SeTakeOwnershipPrivilege restricted to Administrators group in $exportPath"
+    
+        # Import the modified policy and overwrite the database
+        secedit /configure /db secedit.sdb /cfg $exportPath /overwrite
+    
+        Write-Host "`n--- Security policy import complete ---`n"
 }
 function defensive-Countermeasures {
     Write-Host "`n--- Starting: Defensive Countermeasures ---`n"

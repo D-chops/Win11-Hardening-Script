@@ -368,6 +368,117 @@ function os-Updates {
 function application-Updates {
     Write-Host "`n--- Starting: Application Updates (Default Browser) ---`n"
 
+    # Helper function to download and silently install a browser
+    function Download-And-Install($url, $installerPath, $silentArgs) {
+        Write-Host "Downloading installer from $url..."
+        try {
+            Invoke-WebRequest -Uri $url -OutFile $installerPath -UseBasicParsing -ErrorAction Stop
+            Write-Host "Download completed. Running silent install..."
+            Start-Process -FilePath $installerPath -ArgumentList $silentArgs -Wait -NoNewWindow
+            Write-Host "Installation finished."
+            Remove-Item $installerPath -Force
+        } catch {
+            Write-Host "Failed to download or install: $_" -ForegroundColor Red
+        }
+    }
+
+    # Reinstall Chrome if GoogleUpdate.exe is missing
+    function Reinstall-ChromeIfMissing {
+        $googleUpdatePaths = @(
+            "${env:ProgramFiles(x86)}\Google\Update\GoogleUpdate.exe",
+            "${env:ProgramFiles}\Google\Update\GoogleUpdate.exe"
+        )
+        $googleUpdateExe = $googleUpdatePaths | Where-Object { Test-Path $_ } | Select-Object -First 1
+
+        if (-not $googleUpdateExe) {
+            Write-Host "GoogleUpdate.exe missing. Reinstalling Chrome silently..."
+
+            $chromeInstallerUrl = "https://dl.google.com/chrome/install/latest/chrome_installer.exe"
+            $tempInstallerPath = "$env:TEMP\chrome_installer.exe"
+            $silentArgs = "/silent /install"
+
+            Download-And-Install -url $chromeInstallerUrl -installerPath $tempInstallerPath -silentArgs $silentArgs
+
+            # Wait a bit for installation to register services/files
+            Start-Sleep -Seconds 10
+        } else {
+            Write-Host "GoogleUpdate.exe found. No reinstall needed."
+        }
+    }
+
+    # Reinstall Edge if missing (simplified check for msedge.exe)
+    function Reinstall-EdgeIfMissing {
+        $edgePaths = @(
+            "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe",
+            "${env:ProgramFiles}\Microsoft\Edge\Application\msedge.exe"
+        )
+        $edgeExe = $edgePaths | Where-Object { Test-Path $_ } | Select-Object -First 1
+
+        if (-not $edgeExe) {
+            Write-Host "Microsoft Edge missing. Reinstalling silently..."
+
+            $edgeInstallerUrl = "https://msedge.sf.dl.delivery.mp.microsoft.com/filestreamingservice/files/6e8c228f-c7e0-4e9b-a1a9-f8b3e7a003f1/MicrosoftEdgeEnterpriseX64.msi"
+            $tempInstallerPath = "$env:TEMP\MicrosoftEdgeEnterpriseX64.msi"
+            $silentArgs = "/quiet /norestart"
+
+            Download-And-Install -url $edgeInstallerUrl -installerPath $tempInstallerPath -silentArgs $silentArgs
+
+            Start-Sleep -Seconds 10
+        } else {
+            Write-Host "Microsoft Edge found. No reinstall needed."
+        }
+    }
+
+    # Reinstall Firefox if missing
+    function Reinstall-FirefoxIfMissing {
+        $firefoxPaths = @(
+            "${env:ProgramFiles}\Mozilla Firefox\firefox.exe",
+            "${env:ProgramFiles(x86)}\Mozilla Firefox\firefox.exe"
+        )
+        $firefoxExe = $firefoxPaths | Where-Object { Test-Path $_ } | Select-Object -First 1
+
+        if (-not $firefoxExe) {
+            Write-Host "Mozilla Firefox missing. Reinstalling silently..."
+
+            $firefoxInstallerUrl = "https://download.mozilla.org/?product=firefox-latest&os=win64&lang=en-US"
+            $tempInstallerPath = "$env:TEMP\FirefoxInstaller.exe"
+            $silentArgs = "-ms"
+
+            Download-And-Install -url $firefoxInstallerUrl -installerPath $tempInstallerPath -silentArgs $silentArgs
+
+            Start-Sleep -Seconds 10
+        } else {
+            Write-Host "Mozilla Firefox found. No reinstall needed."
+        }
+    }
+
+    try {
+        $browserProgId = (Get-ItemProperty "HKCU:\Software\Microsoft\Windows\Shell\Associations\UrlAssociations\http\UserChoice").ProgId
+
+        switch ($browserProgId) {
+            "ChromeHTML" {
+                Write-Host "Detected default browser: Google Chrome"
+                Reinstall-ChromeIfMissing
+            }
+            "MSEdgeHTM" {
+                Write-Host "Detected default browser: Microsoft Edge"
+                Reinstall-EdgeIfMissing
+            }
+            "FirefoxURL" {
+                Write-Host "Detected default browser: Mozilla Firefox"
+                Reinstall-FirefoxIfMissing
+            }
+            default {
+                Write-Host "Default browser not recognized or not supported for reinstall." -ForegroundColor Yellow
+            }
+        }
+    } catch {
+        Write-Host "Could not detect default browser: $_" -ForegroundColor Yellow
+    }
+
+    # ... Continue with your existing enabling auto-update and update check logic here
+
+    # (Paste your existing Enable-ChromeAutoUpdate, Enable-EdgeAutoUpdate, Enable-FirefoxAutoUpdate functions here and main switch-case to enable + run update checks)
     function Enable-ChromeAutoUpdate {
         Write-Host "Enabling Chrome Auto Update..."
 

@@ -343,26 +343,16 @@ function service-Auditing {
 function os-Updates {
     Write-Host "`n--- Starting: OS Updates ---`n"
 
-    # Check for Windows updates using PowerShell Update module (if available)
+    # Enable Windows Automatic Updates
     try {
-        # Install PSWindowsUpdate module if not present
-        if (-not (Get-Module -ListAvailable -Name PSWindowsUpdate)) {
-            Write-Host "Installing PSWindowsUpdate module..."
-            Install-Module -Name PSWindowsUpdate -Force -Scope CurrentUser
-        }
-
-        Import-Module PSWindowsUpdate
-
-        # List available updates
-        Write-Host "Checking for available Windows updates..."
-        Get-WindowsUpdate
-
-        # Install all available updates
-        Write-Host "Installing all available Windows updates..."
-        Install-WindowsUpdate -AcceptAll -AutoReboot
-
+        Write-Host "Enabling Windows Automatic Updates..."
+        Set-Service -Name wuauserv -StartupType Automatic
+        Start-Service -Name wuauserv
+        # Set registry to enable automatic updates
+        Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update" -Name "AUOptions" -Value 4
+        Write-Host "Windows Automatic Updates enabled."
     } catch {
-        Write-Host "Failed to run Windows updates: $_" -ForegroundColor $ColorWarning
+        Write-Host "Failed to enable Windows Automatic Updates: $_" -ForegroundColor $ColorWarning
     }
 
     # Update Windows Defender signatures (if Defender is present)
@@ -372,9 +362,9 @@ function os-Updates {
     } catch {
         Write-Host "Failed to update Windows Defender signatures: $_" -ForegroundColor $ColorWarning
     }
-}
 
     Write-Host "`n--- OS Updates Complete ---"
+}
 function application-Updates {
     Write-Host "`n--- Starting: Application Updates (Default Browser) ---`n"
 

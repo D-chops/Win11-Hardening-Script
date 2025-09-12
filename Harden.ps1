@@ -368,22 +368,102 @@ function os-Updates {
 function application-Updates {
     Write-Host "`n--- Starting: Application Updates (Default Browser) ---`n"
 
+    function Enable-ChromeAutoUpdate {
+        Write-Host "Enabling Chrome Auto Update..."
+
+        $chromeUpdateKey = "HKLM:\SOFTWARE\Policies\Google\Update"
+        if (-not (Test-Path $chromeUpdateKey)) {
+            New-Item -Path $chromeUpdateKey -Force | Out-Null
+        }
+        Set-ItemProperty -Path $chromeUpdateKey -Name "AutoUpdateCheckPeriodMinutes" -Value 60 -Type DWord
+        Set-ItemProperty -Path $chromeUpdateKey -Name "UpdateDefault" -Value 1 -Type DWord
+
+        foreach ($svcName in @("gupdate", "gupdatem")) {
+            $svc = Get-Service -Name $svcName -ErrorAction SilentlyContinue
+            if ($svc) {
+                if ($svc.StartType -ne "Automatic") {
+                    Write-Host "Setting service '$svcName' to Automatic startup."
+                    Set-Service -Name $svcName -StartupType Automatic
+                }
+                if ($svc.Status -ne "Running") {
+                    Write-Host "Starting service '$svcName'."
+                    Start-Service -Name $svcName
+                } else {
+                    Write-Host "Service '$svcName' is already running."
+                }
+            } else {
+                Write-Host "Service '$svcName' not found. Google Update may not be installed." -ForegroundColor Yellow
+            }
+        }
+
+        Write-Host "Chrome auto-update enabled."
+    }
+
+    function Enable-EdgeAutoUpdate {
+        Write-Host "Enabling Edge Auto Update..."
+
+        $edgeUpdateKey = "HKLM:\SOFTWARE\Policies\Microsoft\EdgeUpdate"
+        if (-not (Test-Path $edgeUpdateKey)) {
+            New-Item -Path $edgeUpdateKey -Force | Out-Null
+        }
+        Set-ItemProperty -Path $edgeUpdateKey -Name "AutoUpdateCheckPeriodMinutes" -Value 60 -Type DWord
+        Set-ItemProperty -Path $edgeUpdateKey -Name "UpdateDefault" -Value 1 -Type DWord
+
+        # Edge update service names (usually Microsoft Edge Update service is "edgeupdate" and "edgeupdatem")
+        foreach ($svcName in @("edgeupdate", "edgeupdatem")) {
+            $svc = Get-Service -Name $svcName -ErrorAction SilentlyContinue
+            if ($svc) {
+                if ($svc.StartType -ne "Automatic") {
+                    Write-Host "Setting service '$svcName' to Automatic startup."
+                    Set-Service -Name $svcName -StartupType Automatic
+                }
+                if ($svc.Status -ne "Running") {
+                    Write-Host "Starting service '$svcName'."
+                    Start-Service -Name $svcName
+                } else {
+                    Write-Host "Service '$svcName' is already running."
+                }
+            } else {
+                Write-Host "Service '$svcName' not found. Edge Update may not be installed." -ForegroundColor Yellow
+            }
+        }
+
+        Write-Host "Edge auto-update enabled."
+    }
+
+    function Enable-FirefoxAutoUpdate {
+        Write-Host "Enabling Firefox Auto Update..."
+
+        $firefoxProfilePath = "$env:APPDATA\Mozilla\Firefox\Profiles"
+        $profile = Get-ChildItem $firefoxProfilePath -Directory | Select-Object -First 1
+        if ($profile) {
+            $userJsPath = Join-Path $profile.FullName "user.js"
+            $prefsToSet = @(
+                'user_pref("app.update.enabled", true);',
+                'user_pref("app.update.auto", true);',
+                'user_pref("app.update.service.enabled", true);'
+            )
+
+            # Append prefs (create file if missing)
+            if (-not (Test-Path $userJsPath)) {
+                New-Item -Path $userJsPath -ItemType File | Out-Null
+            }
+            $prefsToSet | Out-File -FilePath $userJsPath -Encoding ASCII -Append
+
+            Write-Host "Firefox auto-update enabled via user.js."
+        } else {
+            Write-Host "Firefox profile not found; cannot enable auto-update." -ForegroundColor Yellow
+        }
+    }
+
     try {
         $browserProgId = (Get-ItemProperty "HKCU:\Software\Microsoft\Windows\Shell\Associations\UrlAssociations\http\UserChoice").ProgId
         switch ($browserProgId) {
             "ChromeHTML" {
                 Write-Host "Detected default browser: Google Chrome"
 
-                # Enable Chrome auto-update via registry (if disabled)
-                $chromeUpdateKey = "HKLM:\SOFTWARE\Policies\Google\Update"
-                if (-not (Test-Path $chromeUpdateKey)) {
-                    New-Item -Path $chromeUpdateKey -Force | Out-Null
-                }
-                Set-ItemProperty -Path $chromeUpdateKey -Name "AutoUpdateCheckPeriodMinutes" -Value 60 -Type DWord
-                Set-ItemProperty -Path $chromeUpdateKey -Name "UpdateDefault" -Value 1 -Type DWord
-                Write-Host "Enabled Chrome auto-update (via registry)."
+                Enable-ChromeAutoUpdate
 
-                # Run Chrome update check
                 $chromePaths = @(
                     "${env:ProgramFiles(x86)}\Google\Chrome\Application\chrome.exe",
                     "${env:ProgramFiles}\Google\Chrome\Application\chrome.exe"
@@ -399,16 +479,8 @@ function application-Updates {
             "MSEdgeHTM" {
                 Write-Host "Detected default browser: Microsoft Edge"
 
-                # Enable Edge auto-update via registry
-                $edgeUpdateKey = "HKLM:\SOFTWARE\Policies\Microsoft\EdgeUpdate"
-                if (-not (Test-Path $edgeUpdateKey)) {
-                    New-Item -Path $edgeUpdateKey -Force | Out-Null
-                }
-                Set-ItemProperty -Path $edgeUpdateKey -Name "AutoUpdateCheckPeriodMinutes" -Value 60 -Type DWord
-                Set-ItemProperty -Path $edgeUpdateKey -Name "UpdateDefault" -Value 1 -Type DWord
-                Write-Host "Enabled Edge auto-update (via registry)."
+                Enable-EdgeAutoUpdate
 
-                # Run Edge update check
                 $edgePaths = @(
                     "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe",
                     "${env:ProgramFiles}\Microsoft\Edge\Application\msedge.exe"
@@ -424,26 +496,8 @@ function application-Updates {
             "FirefoxURL" {
                 Write-Host "Detected default browser: Mozilla Firefox"
 
-                # Enable Firefox auto-update by modifying prefs.js or user.js (simplified here)
-                # Note: Editing prefs.js directly is tricky; user.js is better for persistent overrides
+                Enable-FirefoxAutoUpdate
 
-                $firefoxProfilePath = "$env:APPDATA\Mozilla\Firefox\Profiles"
-                $profile = Get-ChildItem $firefoxProfilePath -Directory | Select-Object -First 1
-                if ($profile) {
-                    $userJsPath = Join-Path $profile.FullName "user.js"
-                    $prefsToSet = @(
-                        'user_pref("app.update.enabled", true);',
-                        'user_pref("app.update.auto", true);',
-                        'user_pref("app.update.service.enabled", true);'
-                    )
-                    # Write or append these prefs
-                    $prefsToSet | Out-File -FilePath $userJsPath -Encoding ASCII -Append
-                    Write-Host "Enabled Firefox auto-update by modifying user.js"
-                } else {
-                    Write-Host "Firefox profile not found; cannot enable auto-update." -ForegroundColor Yellow
-                }
-
-                # Run Firefox update check
                 $firefoxPaths = @(
                     "${env:ProgramFiles}\Mozilla Firefox\firefox.exe",
                     "${env:ProgramFiles(x86)}\Mozilla Firefox\firefox.exe"

@@ -746,7 +746,7 @@ function prohibited-Files {
 function unwanted-Software {
     Write-Host "`n--- Starting: Unwanted Software Scan ---`n"
 
-    # List of unwanted software display names (can add more)
+    # List of unwanted software display names (add as needed)
     $unwantedSoftwareList = @(
         "Angry IP Scanner",
         "Some Other Unwanted App",
@@ -761,19 +761,16 @@ function unwanted-Software {
         )
         if ($UninstallString) {
             Write-Host "Uninstalling $DisplayName ..."
-            # Clean uninstall string (remove surrounding quotes and parameters after .exe)
+            # Clean uninstall string (remove quotes)
             $cleanUninstall = $UninstallString -replace '"', ''
 
-            # Add silent uninstall flags if applicable (common switches: /S, /quiet, /qn)
             if ($cleanUninstall -match "msiexec") {
-                # For MSI uninstallers
-                $silentArgs = " /qn /norestart"
-                $uninstallCmd = "$cleanUninstall$silentArgs"
-                Start-Process -FilePath "msiexec.exe" -ArgumentList "/x $($cleanUninstall -replace 'msiexec.exe /x', '') $silentArgs" -Wait -NoNewWindow
+                # For MSI uninstallers, add silent flags
+                $productCode = ($cleanUninstall -replace ".*\/x\s*", "")
+                Start-Process -FilePath "msiexec.exe" -ArgumentList "/x $productCode /qn /norestart" -Wait -NoNewWindow
             } else {
-                # For EXE uninstallers, append silent switches (this might vary)
-                $silentArgs = " /S"
-                Start-Process -FilePath $cleanUninstall -ArgumentList $silentArgs -Wait -NoNewWindow
+                # For EXE uninstallers, append silent switch (may vary)
+                Start-Process -FilePath $cleanUninstall -ArgumentList "/S" -Wait -NoNewWindow
             }
 
             Write-Host "$DisplayName uninstalled."
@@ -815,19 +812,30 @@ function unwanted-Software {
     }
 
     Write-Host "Found the following unwanted software:"
+    $foundUnwanted | ForEach-Object { Write-Host "- $($_.DisplayName)" }
 
-    $foundUnwanted | ForEach-Object {
-        Write-Host "- $($_.DisplayName)"
-    }
+    # Ask if user wants to uninstall all at once or prompt individually
+    $choice = Read-Host "Type 'all' to uninstall everything automatically, 'prompt' to uninstall one by one, or 'no' to cancel [all/prompt/no] (default: prompt)"
 
-    # Prompt user to uninstall found software
-    $uninstallPrompt = Read-Host "Would you like to uninstall the above software? (Y/n)"
-    if ($uninstallPrompt -match '^[Yy]$') {
-        foreach ($app in $foundUnwanted) {
-            Uninstall-Software -UninstallString $app.UninstallString -DisplayName $app.DisplayName
+    switch ($choice.ToLower()) {
+        "all" {
+            foreach ($app in $foundUnwanted) {
+                Uninstall-Software -UninstallString $app.UninstallString -DisplayName $app.DisplayName
+            }
         }
-    } else {
-        Write-Host "Uninstallation cancelled by user."
+        "prompt" {
+            foreach ($app in $foundUnwanted) {
+                $answer = Read-Host "Uninstall $($app.DisplayName)? (Y/n)"
+                if ($answer -match '^[Yy]$') {
+                    Uninstall-Software -UninstallString $app.UninstallString -DisplayName $app.DisplayName
+                } else {
+                    Write-Host "Skipped $($app.DisplayName)."
+                }
+            }
+        }
+        default {
+            Write-Host "Uninstallation cancelled."
+        }
     }
 
     Write-Host "`n--- Unwanted Software Scan Complete ---`n"

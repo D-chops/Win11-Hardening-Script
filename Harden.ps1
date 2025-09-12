@@ -698,43 +698,65 @@ function application-Security-Settings {
     }
 
     foreach ($browser in $browsers.Keys) {
-        if ($browser -ne $defaultBrowser) {
-            Write-Host "Attempting to uninstall $($browsers[$browser])..."
-            switch ($browser) {
-                "chrome" {
-                    $chromeUninstall = "${env:ProgramFiles(x86)}\Google\Chrome\Application\chrome.exe"
-                    if (Test-Path $chromeUninstall) {
-                        Start-Process -FilePath $chromeUninstall -ArgumentList "--uninstall --force-uninstall" -Wait
-                        Write-Host "Google Chrome uninstall command executed."
-                    } else {
-                        Write-Host "Google Chrome not found." -ForegroundColor $ColorWarning
-                    }
-                }
-                "edge" {
-                    $edgeUninstall = "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\Installer\setup.exe"
-                    if (Test-Path $edgeUninstall) {
-                        Start-Process -FilePath $edgeUninstall -ArgumentList "--uninstall --system-level --force-uninstall" -Wait
-                        Write-Host "Microsoft Edge uninstall command executed."
-                    } else {
-                        Write-Host "Microsoft Edge uninstaller not found." -ForegroundColor $ColorWarning
-                    }
-                }
-                    "firefox" {
-                        $firefoxUninstallPaths = @(
-                            "${env:ProgramFiles}\Mozilla Firefox\uninstall\helper.exe",
-                            "${env:ProgramFiles(x86)}\Mozilla Firefox\uninstall\helper.exe"
-                        )
-                        $firefoxUninstall = $firefoxUninstallPaths | Where-Object { Test-Path $_ } | Select-Object -First 1
-                        if ($firefoxUninstall) {
-                            Start-Process -FilePath $firefoxUninstall -ArgumentList "/S" -Wait
-                            Write-Host "Mozilla Firefox uninstall command executed."
-                        } else {
-                            Write-Host "Mozilla Firefox uninstaller not found." -ForegroundColor $ColorWarning
+    if ($browser -ne $defaultBrowser) {
+        Write-Host "Attempting to uninstall $($browsers[$browser])..."
+
+        switch ($browser) {
+            "chrome" {
+                $uninstallKeyPaths = @(
+                    "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
+                    "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"
+                )
+
+                $chromeUninstallString = $null
+                foreach ($keyPath in $uninstallKeyPaths) {
+                    $keys = Get-ChildItem $keyPath -ErrorAction SilentlyContinue
+                    foreach ($key in $keys) {
+                        $props = Get-ItemProperty $key.PSPath -ErrorAction SilentlyContinue
+                        if ($props.DisplayName -like "*Google Chrome*") {
+                            $chromeUninstallString = $props.UninstallString
+                            break
                         }
                     }
+                    if ($chromeUninstallString) { break }
+                }
+
+                if ($chromeUninstallString) {
+                    Write-Host "Uninstalling Chrome using registry uninstall string..."
+                    Start-Process -FilePath "cmd.exe" -ArgumentList "/c `"$chromeUninstallString --force-uninstall`"" -Wait
+                } else {
+                    Write-Host "Google Chrome uninstall string not found." -ForegroundColor Yellow
+                }
+            }
+
+            "firefox" {
+                $firefoxUninstallPaths = @(
+                    "${env:ProgramFiles}\Mozilla Firefox\uninstall\helper.exe",
+                    "${env:ProgramFiles(x86)}\Mozilla Firefox\uninstall\helper.exe"
+                )
+                $firefoxUninstall = $firefoxUninstallPaths | Where-Object { Test-Path $_ } | Select-Object -First 1
+                if ($firefoxUninstall) {
+                    Write-Host "Uninstalling Firefox..."
+                    Start-Process -FilePath $firefoxUninstall -ArgumentList "/S" -Wait
+                } else {
+                    Write-Host "Mozilla Firefox uninstaller not found." -ForegroundColor Yellow
+                }
+            }
+
+            "edge" {
+                $edgeUninstallTool = "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\Installer\setup.exe"
+
+                if (Test-Path $edgeUninstallTool) {
+                    Write-Host "Attempting to uninstall Microsoft Edge (system-level)..."
+                    Start-Process -FilePath $edgeUninstallTool -ArgumentList "--uninstall --system-level --force-uninstall --verbose-logging" -Wait
+                } else {
+                    Write-Host "Edge uninstaller not found at standard path. Note: Edge may be non-removable on this system." -ForegroundColor Yellow
                 }
             }
         }
+    }
+}
+
     
     Write-Host "`n--- Application Security Settings Complete ---`n"
 

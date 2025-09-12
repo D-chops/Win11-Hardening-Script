@@ -266,25 +266,21 @@ function Account-Policies {
 # =========================
 #  Function Definitions
 # =========================
-function Local-Policies {
-    param (
-        OptionalParameters
-    )
 function Set-AuditLogonFailure {
     Write-Host "`n[1] Enabling Audit Logon [Failure] policy..."
 
-    $secpolInf = ".\secpol.inf"
+    $secpolInf = "$env:TEMP\secpol.inf"
     secedit /export /cfg $secpolInf
 
     $content = Get-Content $secpolInf
 
     if ($content -notmatch 'AuditLogonEvents') {
-        $content += "`nAuditLogonEvents = 0 1"
+        Add-Content -Path $secpolInf -Value "`nAuditLogonEvents = 0 1"
     } else {
         $content = $content -replace '^AuditLogonEvents.*$', 'AuditLogonEvents = 0 1'
+        Set-Content -Path $secpolInf -Value $content
     }
 
-    Set-Content -Path $secpolInf -Value $content
     echo y | secedit /configure /cfg $secpolInf /overwrite
     Write-Host "[+] Audit Logon [Failure] policy applied."
 }
@@ -292,13 +288,18 @@ function Set-AuditLogonFailure {
 function Set-RestrictTakeOwnership {
     Write-Host "`n[2] Restricting SeTakeOwnershipPrivilege to Administrators..."
 
-    $secpolInf = ".\secpol.inf"
+    $secpolInf = "$env:TEMP\secpol.inf"
     secedit /export /cfg $secpolInf
 
     $content = Get-Content $secpolInf
-    $content = $content -replace '^.*SeTakeOwnershipPrivilege.*$', 'SeTakeOwnershipPrivilege = *S-1-5-32-544'
 
-    Set-Content -Path $secpolInf -Value $content
+    if ($content -notmatch 'SeTakeOwnershipPrivilege') {
+        Add-Content -Path $secpolInf -Value "`nSeTakeOwnershipPrivilege = *S-1-5-32-544"
+    } else {
+        $content = $content -replace '^.*SeTakeOwnershipPrivilege.*$', 'SeTakeOwnershipPrivilege = *S-1-5-32-544'
+        Set-Content -Path $secpolInf -Value $content
+    }
+
     echo y | secedit /configure /cfg $secpolInf /overwrite
     Write-Host "[+] SeTakeOwnershipPrivilege restricted to Administrators."
 }
@@ -306,54 +307,28 @@ function Set-RestrictTakeOwnership {
 function Set-ReinforceCtrlAltDel {
     Write-Host "`n[3] Enforcing CTRL+ALT+DEL requirement for logon..."
 
-    $secpolInf = ".\secpol.inf"
+    $secpolInf = "$env:TEMP\secpol.inf"
     secedit /export /cfg $secpolInf
 
     $content = Get-Content $secpolInf
 
     if ($content -notmatch 'DisableCAD') {
-        $content += "`nDisableCAD = 0"
+        Add-Content -Path $secpolInf -Value "`nDisableCAD = 0"
     } else {
         $content = $content -replace '^DisableCAD.*$', 'DisableCAD = 0'
+        Set-Content -Path $secpolInf -Value $content
     }
 
-    Set-Content -Path $secpolInf -Value $content
     echo y | secedit /configure /cfg $secpolInf /overwrite
     Write-Host "[+] CTRL+ALT+DEL requirement enabled."
 }
 
-# =========================
-#  Menu Logic
-# =========================
-
-function Show-LocalPolicyMenu {
-    Clear-Host
-    Write-Host "`n--- Local Policies Hardening Menu ---`n"
-    Write-Host "1. Audit Logon [Failure]"
-    Write-Host "2. Restrict Take Ownership to Administrators"
-    Write-Host "3. Require CTRL+ALT+DEL for login"
-    Write-Host "4. Apply All"
-    Write-Host "5. Exit`n"
-
-    $choice = Read-Host "Enter your choice (1-5)"
-
-    switch ($choice) {
-        "1" { Set-AuditLogonFailure }
-        "2" { Set-RestrictTakeOwnership }
-        "3" { Set-ReinforceCtrlAltDel }
-        "4" { 
-            Set-AuditLogonFailure
-            Set-RestrictTakeOwnership
-            Set-ReinforceCtrlAltDel
-        }
-        "5" { Write-Host "Exiting..."; return }
-        default { Write-Host "Invalid option. Try again." }
-    }
-
-    Pause
-    Show-LocalPolicyMenu
+function Apply-AllPolicies {
+    Set-AuditLogonFailure
+    Set-RestrictTakeOwnership
+    Set-ReinforceCtrlAltDel
 }
-}
+
 
 # =========================
 #  Entry Point

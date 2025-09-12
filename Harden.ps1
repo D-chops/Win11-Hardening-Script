@@ -100,55 +100,6 @@ Get-MpPreference | Out-File -FilePath "$DOCS\defender.txt"
 
 # Save list of scheduled tasks
 Get-ScheduledTask | Out-File -FilePath "$DOCS\scheduled-tasks.txt"
-# Define the custom registry base key
-$customBaseKey = "HKCU:\Software\CustomUninstallLocations"
-
-# Create the base key if it doesn't exist
-if (-not (Test-Path $customBaseKey)) {
-    New-Item -Path $customBaseKey -Force | Out-Null
-    Write-Host "Created base registry key: $customBaseKey"
-}
-
-# Registry paths to scan for uninstall info
-$uninstallPaths = @(
-    "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
-    "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall",
-    "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"
-)
-
-foreach ($path in $uninstallPaths) {
-    # Get all subkeys (apps)
-    $subKeys = Get-ChildItem -Path $path -ErrorAction SilentlyContinue
-
-    foreach ($subKey in $subKeys) {
-        # Get uninstall info properties
-        $props = Get-ItemProperty -Path $subKey.PSPath -ErrorAction SilentlyContinue
-
-        $displayName = $props.DisplayName
-        $uninstallString = $props.UninstallString
-
-        # Only process if DisplayName and UninstallString exist
-        if ($displayName -and $uninstallString) {
-            # Clean up the display name to use as a valid registry subkey name
-            $regSubKeyName = $displayName -replace '[\\/:*?"<>|]', '_'
-
-            $appKeyPath = Join-Path $customBaseKey $regSubKeyName
-
-            # Create or open the app key
-            if (-not (Test-Path $appKeyPath)) {
-                New-Item -Path $appKeyPath -Force | Out-Null
-            }
-
-            # Set the uninstall string value
-            Set-ItemProperty -Path $appKeyPath -Name "UninstallPath" -Value $uninstallString -Force
-
-            Write-Host "Recorded uninstall path for: $displayName"
-        }
-    }
-}
-
-Write-Host "`nFinished recording uninstall locations."
-
 }
 function Enable-Updates {
     Write-Host "`n--- Starting: Enable updates ---`n"
@@ -379,6 +330,7 @@ function Local-Policies {
     Write-Host "`n[✔] Policies updated successfully."
 }
 
+
       function defensive-Countermeasures {
     Write-Host "`n--- Starting: Defensive Countermeasures ---`n"
 
@@ -423,6 +375,7 @@ function Local-Policies {
     }
 
     Write-Host "`n--- Defensive Countermeasures Complete ---`n"
+}
 }
 
 

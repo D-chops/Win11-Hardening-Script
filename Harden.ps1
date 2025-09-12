@@ -304,9 +304,49 @@ function local-Policies {
         Write-Host "Verification lines:"
         Select-String -Path ".\verify.inf" -Pattern '^SeTakeOwnershipPrivilege|^SeTrustedCredManAccessPrivilege|^SeDenyNetworkLogonRight|^SeCreateTokenPrivilege|^SeCreateGlobalPrivilege|^SeRemoteShutdownPrivilege|^SeLoadDriverPrivilege|^SeSecurityPrivilege'
       }
-        function defensive-Countermeasures {
+      function defensive-Countermeasures {
     Write-Host "`n--- Starting: Defensive Countermeasures ---`n"
+
+    try {
+        # Enable Real-time Protection
+        Write-Host "Enabling Microsoft Defender Real-Time Protection..."
+        Set-MpPreference -DisableRealtimeMonitoring $false
+
+        # Enable Behavior Monitoring
+        Write-Host "Enabling Behavior Monitoring..."
+        Set-MpPreference -DisableBehaviorMonitoring $false
+
+        # Enable Cloud Protection
+        Write-Host "Enabling Cloud Protection..."
+        Set-MpPreference -DisableBlockAtFirstSeen $false
+
+        # Enable Automatic Sample Submission
+        Write-Host "Enabling Automatic Sample Submission..."
+        Set-MpPreference -SubmitSamplesConsent 2  # 2 = Send safe samples automatically
+
+        # Start and set Defender service startup type to automatic
+        $defenderService = Get-Service -Name "WinDefend" -ErrorAction Stop
+        if ($defenderService.Status -ne 'Running') {
+            Write-Host "Starting Microsoft Defender service..."
+            Start-Service -Name "WinDefend"
+        } else {
+            Write-Host "Microsoft Defender service already running."
+        }
+        Set-Service -Name "WinDefend" -StartupType Automatic
+
+        # Update Microsoft Defender definitions
+        Write-Host "Updating Microsoft Defender antivirus definitions..."
+        Update-MpSignature -ErrorAction Stop
+
+        Write-Host "`nMicrosoft Defender is enabled and updated successfully."
+
+    } catch {
+        Write-Host "An error occurred: $_" -ForegroundColor Red
+    }
+
+    Write-Host "`n--- Defensive Countermeasures Complete ---`n"
 }
+
 function Uncategorized-OS-Settings {
     Write-Host "`n--- Starting: Uncategorized OS Settings ---`n"
 

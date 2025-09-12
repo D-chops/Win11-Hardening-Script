@@ -263,69 +263,97 @@ function Account-Policies {
 
     Write-Host "`n--- Account-Policies Complete ---`n"
 }
-function local-Policies {
-    Write-Host "`n--- Exporting and Hardening User Rights Assignments ---`n"
+# =========================
+#  Function Definitions
+# =========================
 
-    # Paths
+function Set-AuditLogonFailure {
+    Write-Host "`n[1] Enabling Audit Logon [Failure] policy..."
+
     $secpolInf = ".\secpol.inf"
-    $backupInf = ".\secpol-backup.inf"
-    $localSdb  = "C:\Windows\Security\local.sdb"
-
-    # Backup current local security database
-    Copy-Item -Path $localSdb -Destination $backupInf -ErrorAction SilentlyContinue
-    Write-Host "Backup of local security database saved to $backupInf"
-
-    # Export current security policy to INF
     secedit /export /cfg $secpolInf
 
-    # Load file content
     $content = Get-Content $secpolInf
 
-    # -------------------------
-    # 1. Harden User Rights Assignments
-    # -------------------------
-    $content = $content `
-        -replace '^.*SeTakeOwnershipPrivilege.*$',         'SeTakeOwnershipPrivilege = *S-1-5-32-544' `
-        -replace '^.*SeTrustedCredManAccessPrivilege.*$',  'SeTrustedCredManAccessPrivilege = *S-1-5-32-544' `
-        -replace '^.*SeDenyNetworkLogonRight.*$',          'SeDenyNetworkLogonRight = *S-1-1-0,*S-1-5-32-546' `
-        -replace '^.*SeCreateTokenPrivilege.*$',           'SeCreateTokenPrivilege = *S-1-5-32-544' `
-        -replace '^.*SeCreateGlobalPrivilege.*$',          'SeCreateGlobalPrivilege = *S-1-5-32-544' `
-        -replace '^.*SeRemoteShutdownPrivilege.*$',        'SeRemoteShutdownPrivilege = *S-1-5-32-544' `
-        -replace '^.*SeLoadDriverPrivilege.*$',            'SeLoadDriverPrivilege = *S-1-5-32-544' `
-        -replace '^.*SeSecurityPrivilege.*$',              'SeSecurityPrivilege = *S-1-5-32-544'
-
-    # -------------------------
-    # 2. Add Audit Policy: Audit Logon [Failure]
-    # -------------------------
     if ($content -notmatch 'AuditLogonEvents') {
-        $content += "`nAuditLogonEvents = 0 1"  # 0 = Success, 1 = Failure
+        $content += "`nAuditLogonEvents = 0 1"
     } else {
         $content = $content -replace '^AuditLogonEvents.*$', 'AuditLogonEvents = 0 1'
     }
 
-    # -------------------------
-    # 3. Enable CTRL+ALT+DEL Requirement
-    # -------------------------
+    Set-Content -Path $secpolInf -Value $content
+    echo y | secedit /configure /cfg $secpolInf /overwrite
+    Write-Host "[+] Audit Logon [Failure] policy applied."
+}
+
+function Set-RestrictTakeOwnership {
+    Write-Host "`n[2] Restricting SeTakeOwnershipPrivilege to Administrators..."
+
+    $secpolInf = ".\secpol.inf"
+    secedit /export /cfg $secpolInf
+
+    $content = Get-Content $secpolInf
+    $content = $content -replace '^.*SeTakeOwnershipPrivilege.*$', 'SeTakeOwnershipPrivilege = *S-1-5-32-544'
+
+    Set-Content -Path $secpolInf -Value $content
+    echo y | secedit /configure /cfg $secpolInf /overwrite
+    Write-Host "[+] SeTakeOwnershipPrivilege restricted to Administrators."
+}
+
+function Set-ReinforceCtrlAltDel {
+    Write-Host "`n[3] Enforcing CTRL+ALT+DEL requirement for logon..."
+
+    $secpolInf = ".\secpol.inf"
+    secedit /export /cfg $secpolInf
+
+    $content = Get-Content $secpolInf
+
     if ($content -notmatch 'DisableCAD') {
-        $content += "`nDisableCAD = 0"  # 0 = Enabled (CTRL+ALT+DEL required)
+        $content += "`nDisableCAD = 0"
     } else {
         $content = $content -replace '^DisableCAD.*$', 'DisableCAD = 0'
     }
 
-    # Save updated content
     Set-Content -Path $secpolInf -Value $content
-    Write-Host "Security settings updated in $secpolInf"
-
-    # Import the modified policy and overwrite the database
-    echo y | secedit /configure /db $localSdb /cfg $secpolInf /overwrite
-
-    Write-Host "`n--- User Rights and Local Policies Hardening Complete ---`n"
-
-    # Optional: Verify changes
-    secedit /export /cfg ".\verify.inf"
-    Write-Host "Verification lines:"
-    Select-String -Path ".\verify.inf" -Pattern '^SeTakeOwnershipPrivilege|^AuditLogonEvents|^DisableCAD'
+    echo y | secedit /configure /cfg $secpolInf /overwrite
+    Write-Host "[+] CTRL+ALT+DEL requirement enabled."
 }
+
+# =========================
+#  Menu Logic
+# =========================
+
+function Show-LocalPolicyMenu {
+    Clear-Host
+    Write-Host "`n--- Local Policies Hardening Menu ---`n"
+    Write-Host "1. Audit Logon [Failure]"
+    Write-Host "2. Restrict Take Ownership to Administrators"
+    Write-Host "3. Require CTRL+ALT+DEL for login"
+    Write-Host "4. Apply All"
+    Write-Host "5. Exit`n"
+
+    $choice = Read-Host "Enter your choice (1-5)"
+
+    switch ($choice) {
+        "1" { Set-AuditLogonFailure }
+        "2" { Set-RestrictTakeOwnership }
+        "3" { Set-ReinforceCtrlAltDel }
+        "4" { 
+            Set-AuditLogonFailure
+            Set-RestrictTakeOwnership
+            Set-ReinforceCtrlAltDel
+        }
+        "5" { Write-Host "Exiting..."; return }
+        default { Write-Host "Invalid option. Try again." }
+    }
+
+    Pause
+    Show-LocalPolicyMenu
+}
+
+# =========================
+#  Entry Point
+# =========================
 
       function defensive-Countermeasures {
     Write-Host "`n--- Starting: Defensive Countermeasures ---`n"

@@ -90,8 +90,8 @@ Get-ItemProperty HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\* |
 # Save list of running services
 Get-Service | Where-Object {$_.Status -eq 'Running'} | Out-File -FilePath "$DOCS\services.txt"
 
-# Save list of installed features
-Get-WindowsFeature | Where-Object {$_.Installed} | Out-File -FilePath "$DOCS\features.txt"
+# Save list of installed Windows optional features (Windows 10/11)
+Get-WindowsOptionalFeature -Online | Where-Object {$_.State -eq 'Enabled'} | Out-File -FilePath "$DOCS\features.txt"
 
 # Export security configuration
 secedit /export /cfg "$DOCS\secedit-export.inf"

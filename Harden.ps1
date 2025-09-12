@@ -378,14 +378,17 @@ function os-Updates {
 function application-Updates {
     Write-Host "`n--- Starting: Application Updates (Default Browser) ---`n"
 
-    # Detect default browser from registry
     try {
         $browserProgId = (Get-ItemProperty "HKCU:\Software\Microsoft\Windows\Shell\Associations\UrlAssociations\http\UserChoice").ProgId
         switch ($browserProgId) {
             "ChromeHTML" {
                 Write-Host "Detected default browser: Google Chrome"
-                $chromePath = "${env:ProgramFiles(x86)}\Google\Chrome\Application\chrome.exe"
-                if (Test-Path $chromePath) {
+                $chromePaths = @(
+                    "${env:ProgramFiles(x86)}\Google\Chrome\Application\chrome.exe",
+                    "${env:ProgramFiles}\Google\Chrome\Application\chrome.exe"
+                )
+                $chromePath = $chromePaths | Where-Object { Test-Path $_ } | Select-Object -First 1
+                if ($chromePath) {
                     Write-Host "Running Chrome update..."
                     Start-Process -FilePath $chromePath -ArgumentList "--check-for-update-interval=1" -WindowStyle Hidden
                 } else {
@@ -394,8 +397,12 @@ function application-Updates {
             }
             "MSEdgeHTM" {
                 Write-Host "Detected default browser: Microsoft Edge"
-                $edgePath = "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe"
-                if (Test-Path $edgePath) {
+                $edgePaths = @(
+                    "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe",
+                    "${env:ProgramFiles}\Microsoft\Edge\Application\msedge.exe"
+                )
+                $edgePath = $edgePaths | Where-Object { Test-Path $_ } | Select-Object -First 1
+                if ($edgePath) {
                     Write-Host "Running Edge update..."
                     Start-Process -FilePath $edgePath -ArgumentList "--check-for-update-interval=1" -WindowStyle Hidden
                 } else {
@@ -404,8 +411,12 @@ function application-Updates {
             }
             "FirefoxURL" {
                 Write-Host "Detected default browser: Mozilla Firefox"
-                $firefoxPath = "${env:ProgramFiles}\Mozilla Firefox\firefox.exe"
-                if (Test-Path $firefoxPath) {
+                $firefoxPaths = @(
+                    "${env:ProgramFiles}\Mozilla Firefox\firefox.exe",
+                    "${env:ProgramFiles(x86)}\Mozilla Firefox\firefox.exe"
+                )
+                $firefoxPath = $firefoxPaths | Where-Object { Test-Path $_ } | Select-Object -First 1
+                if ($firefoxPath) {
                     Write-Host "Running Firefox update..."
                     Start-Process -FilePath $firefoxPath -ArgumentList "-headless -update" -WindowStyle Hidden
                 } else {
@@ -419,6 +430,8 @@ function application-Updates {
     } catch {
         Write-Host "Could not detect default browser or run update: $_" -ForegroundColor $ColorWarning
     }
+
+    Write-Host "`n--- Application Updates Complete ---`n"
 }
 
     Write-Host "`n--- Application Updates Complete ---`n"
@@ -521,22 +534,26 @@ function application-Security-Settings {
                         Write-Host "Microsoft Edge uninstaller not found." -ForegroundColor $ColorWarning
                     }
                 }
-                "firefox" {
-                    $firefoxUninstall = "${env:ProgramFiles}\Mozilla Firefox\uninstall\helper.exe"
-                    if (Test-Path $firefoxUninstall) {
-                        Start-Process -FilePath $firefoxUninstall -ArgumentList "/S" -Wait
-                        Write-Host "Mozilla Firefox uninstall command executed."
-                    } else {
-                        Write-Host "Mozilla Firefox uninstaller not found." -ForegroundColor $ColorWarning
+                    "firefox" {
+                        $firefoxUninstallPaths = @(
+                            "${env:ProgramFiles}\Mozilla Firefox\uninstall\helper.exe",
+                            "${env:ProgramFiles(x86)}\Mozilla Firefox\uninstall\helper.exe"
+                        )
+                        $firefoxUninstall = $firefoxUninstallPaths | Where-Object { Test-Path $_ } | Select-Object -First 1
+                        if ($firefoxUninstall) {
+                            Start-Process -FilePath $firefoxUninstall -ArgumentList "/S" -Wait
+                            Write-Host "Mozilla Firefox uninstall command executed."
+                        } else {
+                            Write-Host "Mozilla Firefox uninstaller not found." -ForegroundColor $ColorWarning
+                        }
                     }
                 }
             }
         }
-    }
-}
-
+    
     Write-Host "`n--- Application Security Settings Complete ---`n"
 
+    }
 # Menu loop
 :menu do {
     Write-Host "`nSelect an option:`n"

@@ -744,8 +744,95 @@ function prohibited-Files {
     Write-Host "`n--- Starting: Prohibited Files ---`n"
 }
 function unwanted-Software {
-    Write-Host "`n--- Starting: Unwanted Software ---`n"
+    Write-Host "`n--- Starting: Unwanted Software Scan ---`n"
+
+    # List of unwanted software display names (can add more)
+    $unwantedSoftwareList = @(
+        "Angry IP Scanner",
+        "Some Other Unwanted App",
+        "Example Tool"
+    )
+
+    # Helper function to uninstall software by uninstall string
+    function Uninstall-Software {
+        param (
+            [string]$UninstallString,
+            [string]$DisplayName
+        )
+        if ($UninstallString) {
+            Write-Host "Uninstalling $DisplayName ..."
+            # Clean uninstall string (remove surrounding quotes and parameters after .exe)
+            $cleanUninstall = $UninstallString -replace '"', ''
+
+            # Add silent uninstall flags if applicable (common switches: /S, /quiet, /qn)
+            if ($cleanUninstall -match "msiexec") {
+                # For MSI uninstallers
+                $silentArgs = " /qn /norestart"
+                $uninstallCmd = "$cleanUninstall$silentArgs"
+                Start-Process -FilePath "msiexec.exe" -ArgumentList "/x $($cleanUninstall -replace 'msiexec.exe /x', '') $silentArgs" -Wait -NoNewWindow
+            } else {
+                # For EXE uninstallers, append silent switches (this might vary)
+                $silentArgs = " /S"
+                Start-Process -FilePath $cleanUninstall -ArgumentList $silentArgs -Wait -NoNewWindow
+            }
+
+            Write-Host "$DisplayName uninstalled."
+        } else {
+            Write-Host "No uninstall string found for $DisplayName. Manual uninstall may be required."
+        }
+    }
+
+    # Get all installed software from uninstall registry keys
+    $installedSoftware = @()
+
+    $registryPaths = @(
+        "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*",
+        "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*",
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*"
+    )
+
+    foreach ($path in $registryPaths) {
+        $items = Get-ItemProperty -Path $path -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName }
+        if ($items) {
+            $installedSoftware += $items
+        }
+    }
+
+    # Filter installed software for unwanted items
+    $foundUnwanted = @()
+
+    foreach ($software in $installedSoftware) {
+        foreach ($unwanted in $unwantedSoftwareList) {
+            if ($software.DisplayName -like "*$unwanted*") {
+                $foundUnwanted += $software
+            }
+        }
+    }
+
+    if ($foundUnwanted.Count -eq 0) {
+        Write-Host "No unwanted software found."
+        return
+    }
+
+    Write-Host "Found the following unwanted software:"
+
+    $foundUnwanted | ForEach-Object {
+        Write-Host "- $($_.DisplayName)"
+    }
+
+    # Prompt user to uninstall found software
+    $uninstallPrompt = Read-Host "Would you like to uninstall the above software? (Y/n)"
+    if ($uninstallPrompt -match '^[Yy]$') {
+        foreach ($app in $foundUnwanted) {
+            Uninstall-Software -UninstallString $app.UninstallString -DisplayName $app.DisplayName
+        }
+    } else {
+        Write-Host "Uninstallation cancelled by user."
+    }
+
+    Write-Host "`n--- Unwanted Software Scan Complete ---`n"
 }
+
 function malware {
     Write-Host "`n--- Starting: Malware ---`n"
 }

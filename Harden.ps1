@@ -1153,8 +1153,8 @@ function application-Security-Settings {
         "1" { Document-System }
         "2" { Enable-Updates }
         "3" { User-Auditing }
-        "4" {account-Policies }
-        "5" {local-Policies }
+        "4" { account-Policies }
+        "5" { local-Policies }
         "6" {defensive-Countermeasures }
         "7" {uncategorized-OS-Settings }
         "8" {service-Auditing }

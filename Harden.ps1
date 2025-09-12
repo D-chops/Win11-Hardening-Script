@@ -268,14 +268,9 @@ function Account-Policies {
 # =========================
 function Local-Policies {
     param (
-        [switch]$EnableAuditLogonFailure,
-        [switch]$DisableAuditLogonFailure,
-
-        [switch]$RestrictTakeOwnership,
-        [switch]$AllowTakeOwnership,
-
-        [switch]$RequireCtrlAltDel,
-        [switch]$DoNotRequireCtrlAltDel
+        [bool]$AuditLogonFailure,
+        [bool]$TakeOwnershipRestricted,
+        [bool]$RequireCtrlAltDel
     )
 
     $secpolInf = Join-Path -Path $env:TEMP -ChildPath "secpol.inf"
@@ -284,7 +279,6 @@ function Local-Policies {
     secedit /export /cfg $secpolInf | Out-Null
     $content = Get-Content $secpolInf -Raw
 
-    # Helper function to update or add a setting in secpol.inf content
     function Update-SecPolSetting {
         param (
             [string]$Key,
@@ -303,33 +297,39 @@ function Local-Policies {
     }
 
     # === Audit Logon Events (Failure) ===
-    if ($EnableAuditLogonFailure) {
-        Write-Host "[*] Enabling Audit Logon [Failure]..."
-        Update-SecPolSetting -Key "AuditLogonEvents" -Value "0 1"
-    }
-    elseif ($DisableAuditLogonFailure) {
-        Write-Host "[*] Disabling Audit Logon [Failure]..."
-        Update-SecPolSetting -Key "AuditLogonEvents" -Value "0 0"
+    if ($PSBoundParameters.ContainsKey('AuditLogonFailure')) {
+        if ($AuditLogonFailure) {
+            Write-Host "[*] Enabling Audit Logon [Failure]..."
+            Update-SecPolSetting -Key "AuditLogonEvents" -Value "0 1"
+        }
+        else {
+            Write-Host "[*] Disabling Audit Logon [Failure]..."
+            Update-SecPolSetting -Key "AuditLogonEvents" -Value "0 0"
+        }
     }
 
     # === Take Ownership Privilege ===
-    if ($RestrictTakeOwnership) {
-        Write-Host "[*] Restricting SeTakeOwnershipPrivilege to Administrators..."
-        Update-SecPolSetting -Key "SeTakeOwnershipPrivilege" -Value "*S-1-5-32-544"
-    }
-    elseif ($AllowTakeOwnership) {
-        Write-Host "[*] Allowing SeTakeOwnershipPrivilege (removing restriction)..."
-        Update-SecPolSetting -Key "SeTakeOwnershipPrivilege" -Value ""
+    if ($PSBoundParameters.ContainsKey('TakeOwnershipRestricted')) {
+        if ($TakeOwnershipRestricted) {
+            Write-Host "[*] Restricting SeTakeOwnershipPrivilege to Administrators..."
+            Update-SecPolSetting -Key "SeTakeOwnershipPrivilege" -Value "*S-1-5-32-544"
+        }
+        else {
+            Write-Host "[*] Allowing SeTakeOwnershipPrivilege (removing restriction)..."
+            Update-SecPolSetting -Key "SeTakeOwnershipPrivilege" -Value ""
+        }
     }
 
     # === CTRL+ALT+DEL Requirement ===
-    if ($RequireCtrlAltDel) {
-        Write-Host "[*] Enforcing CTRL+ALT+DEL requirement for logon..."
-        Update-SecPolSetting -Key "DisableCAD" -Value "0"
-    }
-    elseif ($DoNotRequireCtrlAltDel) {
-        Write-Host "[*] Disabling CTRL+ALT+DEL requirement for logon..."
-        Update-SecPolSetting -Key "DisableCAD" -Value "1"
+    if ($PSBoundParameters.ContainsKey('RequireCtrlAltDel')) {
+        if ($RequireCtrlAltDel) {
+            Write-Host "[*] Enforcing CTRL+ALT+DEL requirement for logon..."
+            Update-SecPolSetting -Key "DisableCAD" -Value "0"
+        }
+        else {
+            Write-Host "[*] Disabling CTRL+ALT+DEL requirement for logon..."
+            Update-SecPolSetting -Key "DisableCAD" -Value "1"
+        }
     }
 
     # Save updated content back to secpol.inf

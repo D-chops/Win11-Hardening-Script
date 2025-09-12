@@ -635,6 +635,7 @@ function application-Security-Settings {
             "ChromeHTML" { $defaultBrowser = "chrome" }
             "MSEdgeHTM" { $defaultBrowser = "edge" }
             "FirefoxURL" { $defaultBrowser = "firefox" }
+            "IE.HTTP" { $defaultBrowser = "ie" }
             default { $defaultBrowser = $null }
         }
     } catch {
@@ -647,7 +648,7 @@ function application-Security-Settings {
     # Option to change default browser before disabling others
     $changeDefault = Read-Host "Would you like to change the default browser? (Y/n) [Default: n]"
     if ($changeDefault -match "^[Yy]$") {
-        Write-Host "Options: chrome, edge, firefox"
+        Write-Host "Options: chrome, edge, firefox, ie"
         $newDefault = Read-Host "Enter the browser to set as default"
         switch ($newDefault.ToLower()) {
             "chrome" {
@@ -680,6 +681,11 @@ function application-Security-Settings {
                     Write-Host "Firefox not found." -ForegroundColor Yellow
                 }
             }
+            "ie" {
+                # IE does not have a simple command line for default browser, suggest manual
+                Write-Host "To set IE as default browser, please configure via Settings manually." -ForegroundColor Yellow
+                $defaultBrowser = "ie"
+            }
             default {
                 Write-Host "Unknown browser option." -ForegroundColor Yellow
             }
@@ -687,14 +693,14 @@ function application-Security-Settings {
     }
 
     # Disable all other browsers (instead of uninstalling)
-    $browsers = @("chrome", "edge", "firefox")
+    $browsers = @("chrome", "edge", "firefox", "ie")
     foreach ($browser in $browsers) {
         if ($browser -ne $defaultBrowser) {
             Write-Host "Disabling $browser since it's not the default..."
 
             switch ($browser) {
                 "chrome" {
-                    # Try to block Chrome execution or updates
+                    # Disable Chrome auto-updates via registry policy
                     $chromeRegPath = "HKLM:\SOFTWARE\Policies\Google\Update"
                     if (-not (Test-Path $chromeRegPath)) {
                         New-Item -Path $chromeRegPath -Force | Out-Null
@@ -716,7 +722,7 @@ function application-Security-Settings {
                         }
                     }
 
-                    # Optional: attempt to rename Edge folder (if allowed)
+                    # Attempt to rename Edge folder (if allowed)
                     $edgeDir = "${env:ProgramFiles(x86)}\Microsoft\Edge"
                     if (Test-Path $edgeDir) {
                         try {
@@ -744,7 +750,7 @@ function application-Security-Settings {
                         Write-Host "No Firefox profile found." -ForegroundColor Yellow
                     }
 
-                    # Optional: try renaming Firefox.exe to prevent launching
+                    # Try renaming Firefox executable to prevent launching
                     $firefoxExePaths = @(
                         "${env:ProgramFiles}\Mozilla Firefox\firefox.exe",
                         "${env:ProgramFiles(x86)}\Mozilla Firefox\firefox.exe"
@@ -760,12 +766,41 @@ function application-Security-Settings {
                         }
                     }
                 }
+
+                "ie" {
+                    # Disable IE via Windows Feature
+                    $featureName = "Internet-Explorer-Optional-amd64"
+                    $feature = Get-WindowsOptionalFeature -Online -FeatureName $featureName -ErrorAction SilentlyContinue
+                    if ($feature -and $feature.State -eq "Enabled") {
+                        Disable-WindowsOptionalFeature -Online -FeatureName $featureName -NoRestart
+                        Write-Host "Disabled Internet Explorer feature."
+                    } else {
+                        Write-Host "Internet Explorer feature already disabled or not found."
+                    }
+
+                    # Try renaming iexplore.exe (usually in SysWOW64 and System32)
+                    $iePaths = @(
+                        "$env:windir\SysWOW64\iexplore.exe",
+                        "$env:windir\System32\iexplore.exe"
+                    )
+                    foreach ($iePath in $iePaths) {
+                        if (Test-Path $iePath) {
+                            try {
+                                Rename-Item -Path $iePath -NewName "iexplore_disabled.exe"
+                                Write-Host "Renamed iexplore.exe to disable launching."
+                            } catch {
+                                Write-Host "Could not rename iexplore.exe (access denied or running)." -ForegroundColor Yellow
+                            }
+                        }
+                    }
+                }
             }
         }
     }
 
     Write-Host "`n--- Application Security Settings Complete ---`n"
 }
+
 # Menu loop
 :menu do {
     Write-Host "`nSelect an option:`n"

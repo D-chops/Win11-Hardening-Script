@@ -748,17 +748,6 @@ function unwanted-Software {
 
     # List of unwanted software display names (add as needed)
     $unwantedSoftwareList = @(
-        "Angry IP Scanner",
-        "Some Other Unwanted App",
-        "Example Tool"
-    )
-
-    # Helper function to uninstall software by uninstall string
-function unwanted-Software {
-    Write-Host "`n--- Starting: Unwanted Software Scan ---`n"
-
-    # List of unwanted software display names (add as needed)
-    $unwantedSoftwareList = @(
         "Angry IP Scanner"
         # Add other unwanted software here if needed
     )
@@ -766,9 +755,23 @@ function unwanted-Software {
     # Base path to search for the "everything" folder
     $basePath = "C:\inetpub"
 
-    # Search recursively for any folder named "everything" under C:\inetpub
-    $everythingFolders = Get-ChildItem -Path $basePath -Directory -Recurse -ErrorAction SilentlyContinue |
-        Where-Object { $_.Name -ieq "everything" }
+    # Debug: Confirm base path exists
+    if (-Not (Test-Path $basePath)) {
+        Write-Host "Base path $basePath does NOT exist. Skipping folder search."
+        $everythingFolders = @()
+    }
+    else {
+        # Search recursively for any folder named "everything" under C:\inetpub
+        Write-Host "Searching for folder named 'everything' under $basePath ..."
+        try {
+            $everythingFolders = Get-ChildItem -Path $basePath -Directory -Recurse -ErrorAction Stop |
+                Where-Object { $_.Name -ieq "everything" }
+        }
+        catch {
+            Write-Host "Error during folder search: $_"
+            $everythingFolders = @()
+        }
+    }
 
     if ($everythingFolders.Count -eq 0) {
         Write-Host "No 'everything' folder found under $basePath"
@@ -787,9 +790,16 @@ function unwanted-Software {
     )
 
     foreach ($path in $registryPaths) {
-        $items = Get-ItemProperty -Path $path -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName }
-        if ($items) {
-            $installedSoftware += $items
+        Write-Host "Checking registry path: $path"
+        try {
+            $items = Get-ItemProperty -Path $path -ErrorAction Stop | Where-Object { $_.DisplayName }
+            if ($items) {
+                Write-Host "Found $($items.Count) entries at $path"
+                $installedSoftware += $items
+            }
+        }
+        catch {
+            Write-Host "Failed to read registry path $path: $($_)"
         }
     }
 
@@ -799,6 +809,7 @@ function unwanted-Software {
     foreach ($software in $installedSoftware) {
         foreach ($unwanted in $unwantedSoftwareList) {
             if ($software.DisplayName -like "*$unwanted*") {
+                Write-Host "Matched unwanted software: $($software.DisplayName)"
                 $foundUnwanted += $software
             }
         }
@@ -883,7 +894,6 @@ function unwanted-Software {
     }
 
     Write-Host "`n--- Unwanted Software Scan Complete ---`n"
-}
 }
 
 function malware {

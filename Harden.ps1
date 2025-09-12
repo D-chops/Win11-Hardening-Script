@@ -754,43 +754,27 @@ function unwanted-Software {
     )
 
     # Helper function to uninstall software by uninstall string
- function unwanted-Software {
+function unwanted-Software {
     Write-Host "`n--- Starting: Unwanted Software Scan ---`n"
 
     # List of unwanted software display names (add as needed)
     $unwantedSoftwareList = @(
-        "Angry IP Scanner",
-        "Some Other Unwanted App",
-        "Example Tool"
+        "Angry IP Scanner"
+        # Add other unwanted software here if needed
     )
 
-    # Path to the "Everything" app folder
-    $everythingPath = "C:\inetpub\ftproot\everything"
+    # Base path to search for the "everything" folder
+    $basePath = "C:\inetpub"
 
-    # Helper function to uninstall software by uninstall string
-    function Uninstall-Software {
-        param (
-            [string]$UninstallString,
-            [string]$DisplayName
-        )
-        if ($UninstallString) {
-            Write-Host "Uninstalling $DisplayName ..."
-            # Clean uninstall string (remove quotes)
-            $cleanUninstall = $UninstallString -replace '"', ''
+    # Search recursively for any folder named "everything" under C:\inetpub
+    $everythingFolders = Get-ChildItem -Path $basePath -Directory -Recurse -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -ieq "everything" }
 
-            if ($cleanUninstall -match "msiexec") {
-                # For MSI uninstallers, add silent flags
-                $productCode = ($cleanUninstall -replace ".*\/x\s*", "")
-                Start-Process -FilePath "msiexec.exe" -ArgumentList "/x $productCode /qn /norestart" -Wait -NoNewWindow
-            } else {
-                # For EXE uninstallers, append silent switch (may vary)
-                Start-Process -FilePath $cleanUninstall -ArgumentList "/S" -Wait -NoNewWindow
-            }
-
-            Write-Host "$DisplayName uninstalled."
-        } else {
-            Write-Host "No uninstall string found for $DisplayName. Manual uninstall may be required."
-        }
+    if ($everythingFolders.Count -eq 0) {
+        Write-Host "No 'everything' folder found under $basePath"
+    } else {
+        Write-Host "Found the following 'everything' folder(s):"
+        $everythingFolders | ForEach-Object { Write-Host "- $($_.FullName)" }
     }
 
     # Get all installed software from uninstall registry keys
@@ -820,15 +804,7 @@ function unwanted-Software {
         }
     }
 
-    # Check if "Everything" folder exists
-    $everythingExists = Test-Path -Path $everythingPath
-
-    if ($everythingExists) {
-        Write-Host "Found folder: Everything app at $everythingPath"
-    }
-
-    # If nothing found and no folder, exit
-    if ($foundUnwanted.Count -eq 0 -and -not $everythingExists) {
+    if ($foundUnwanted.Count -eq 0 -and $everythingFolders.Count -eq 0) {
         Write-Host "No unwanted software or folders found."
         return
     }
@@ -842,24 +818,43 @@ function unwanted-Software {
     # Ask user for action
     $choice = Read-Host "Type 'all' to uninstall everything and delete folders automatically, 'prompt' to uninstall one by one, or 'no' to cancel [all/prompt/no] (default: prompt)"
 
+    function Uninstall-Software {
+        param (
+            [string]$UninstallString,
+            [string]$DisplayName
+        )
+        if ($UninstallString) {
+            Write-Host "Uninstalling $DisplayName ..."
+            $cleanUninstall = $UninstallString -replace '"', ''
+
+            if ($cleanUninstall -match "msiexec") {
+                $productCode = ($cleanUninstall -replace ".*\/x\s*", "")
+                Start-Process -FilePath "msiexec.exe" -ArgumentList "/x $productCode /qn /norestart" -Wait -NoNewWindow
+            } else {
+                Start-Process -FilePath $cleanUninstall -ArgumentList "/S" -Wait -NoNewWindow
+            }
+
+            Write-Host "$DisplayName uninstalled."
+        } else {
+            Write-Host "No uninstall string found for $DisplayName. Manual uninstall may be required."
+        }
+    }
+
     switch ($choice.ToLower()) {
         "all" {
-            # Uninstall all software found
             foreach ($app in $foundUnwanted) {
                 Uninstall-Software -UninstallString $app.UninstallString -DisplayName $app.DisplayName
             }
-            # Delete the Everything folder if found
-            if ($everythingExists) {
+            foreach ($folder in $everythingFolders) {
                 try {
-                    Remove-Item -Path $everythingPath -Recurse -Force
-                    Write-Host "Deleted folder: $everythingPath"
+                    Remove-Item -Path $folder.FullName -Recurse -Force -ErrorAction Stop
+                    Write-Host "Deleted folder: $($folder.FullName)"
                 } catch {
-                    Write-Host "Failed to delete ${everythingPath}: $_"
+                    Write-Host "Failed to delete $($folder.FullName): $_"
                 }
             }
         }
         "prompt" {
-            # Prompt for uninstalling each software
             foreach ($app in $foundUnwanted) {
                 $answer = Read-Host "Uninstall $($app.DisplayName)? (Y/n)"
                 if ($answer -match '^[Yy]$') {
@@ -868,18 +863,17 @@ function unwanted-Software {
                     Write-Host "Skipped $($app.DisplayName)."
                 }
             }
-            # Prompt for deleting the Everything folder
-            if ($everythingExists) {
-                $deleteFolder = Read-Host "Delete folder Everything at $everythingPath? (Y/n)"
+            foreach ($folder in $everythingFolders) {
+                $deleteFolder = Read-Host "Delete folder $($folder.FullName)? (Y/n)"
                 if ($deleteFolder -match '^[Yy]$') {
                     try {
-                        Remove-Item -Path $everythingPath -Recurse -Force
-                        Write-Host "Deleted folder: $everythingPath"
+                        Remove-Item -Path $folder.FullName -Recurse -Force -ErrorAction Stop
+                        Write-Host "Deleted folder: $($folder.FullName)"
                     } catch {
-                        Write-Host "Failed to delete ${everythingPath}: $_"
+                        Write-Host "Failed to delete $($folder.FullName): $_"
                     }
                 } else {
-                    Write-Host "Skipped deleting $everythingPath."
+                    Write-Host "Skipped deleting $($folder.FullName)."
                 }
             }
         }
@@ -891,7 +885,6 @@ function unwanted-Software {
     Write-Host "`n--- Unwanted Software Scan Complete ---`n"
 }
 }
-
 
 function malware {
     Write-Host "`n--- Starting: Malware ---`n"

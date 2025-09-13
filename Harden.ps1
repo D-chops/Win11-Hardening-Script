@@ -30,10 +30,12 @@ if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdent
 }
 # Display the computer's hostname
 Write-Host "Computer Name: $env:COMPUTERNAME"
-
 # Display the Windows version
 Write-Host "Windows Version:"
 Get-ComputerInfo | Select-Object -Property WindowsProductName, WindowsVersion, OsHardwareAbstractionLayer
+Write-Host "Script Run Time: $(Get-Date)"
+
+
 
 # Define menu options
 $menuOptions = @(
@@ -53,16 +55,8 @@ $menuOptions = @(
     "Application Security Settings",
     "exit"
 )
-# Display the computer's hostname
-Write-Host "Computer Name: $env:COMPUTERNAME"
 
-# Display the computer's hostname
-Write-Host "Computer Name: $env:COMPUTERNAME"
 
-# Display the Windows version
-Write-Host "Windows Version:"
-Get-ComputerInfo | Select-Object -Property WindowsProductName, WindowsVersion, OsHardwareAbstractionLayer
-Write-Host "Script Run Time: $(Get-Date)"
 
 function Document-System {
     Write-Host "`n--- Starting: Document the system ---`n"
@@ -104,42 +98,7 @@ Get-ScheduledTask | Out-File -FilePath "$DOCS\scheduled-tasks.txt"
 function Enable-Updates {
     Write-Host "`n--- Starting: Enable updates ---`n"
 }
-function Review-GroupMembers {
-    param (
-        [Parameter(Mandatory=$true)]
-        [string]$GroupName
-    )
 
-    Write-Host "`n=== Auditing group: $GroupName ===" -ForegroundColor $ColorHeader
-
-    try {
-        $members = Get-LocalGroupMember -Group $GroupName -ErrorAction Stop
-    } catch {
-        Write-Host "Group '$GroupName' not found or error occurred." -ForegroundColor $ColorWarning
-        return
-    }
-
-    foreach ($member in $members) {
-        Write-Host "Is " -NoNewline
-        Write-Host "$($member.Name)" -ForegroundColor $ColorName -NoNewline
-        Write-Host " authorized to be in " -NoNewline
-        Write-Host "$GroupName" -ForegroundColor $ColorName -NoNewline
-        Write-Host "? [Y/n] (default Y) " -ForegroundColor $ColorPrompt -NoNewline
-        $response = Read-Host
-
-        if ($response -match '^[Nn]') {
-            try {
-                Remove-LocalGroupMember -Group $GroupName -Member $member.Name -ErrorAction Stop
-                Write-Host "'$($member.Name)' removed from '$GroupName'." -ForegroundColor $ColorRemoved
-            } catch {
-                Write-Host "Failed to remove '$($member.Name)': $_" -ForegroundColor $ColorWarning
-            }
-        } else {
-            Write-Host "'$($member.Name)' kept in '$GroupName'." -ForegroundColor $ColorKept
-        }
-    }
-    Write-Host "`nReview complete for group: $GroupName" -ForegroundColor $ColorHeader
-}
 function User-Auditing {
     Write-Host "`n--- Starting: User and Admin Auditing ---`n"
 
@@ -205,6 +164,42 @@ function User-Auditing {
             Write-Host "Failed to create user '$newUserName': $_"
         }
     }
+function Review-GroupMembers {
+    param (
+        [Parameter(Mandatory=$true)]
+        [string]$GroupName
+    )
+
+    Write-Host "`n=== Auditing group: $GroupName ===" -ForegroundColor $ColorHeader
+
+    try {
+        $members = Get-LocalGroupMember -Group $GroupName -ErrorAction Stop
+    } catch {
+        Write-Host "Group '$GroupName' not found or error occurred." -ForegroundColor $ColorWarning
+        return
+    }
+
+    foreach ($member in $members) {
+        Write-Host "Is " -NoNewline
+        Write-Host "$($member.Name)" -ForegroundColor $ColorName -NoNewline
+        Write-Host " authorized to be in " -NoNewline
+        Write-Host "$GroupName" -ForegroundColor $ColorName -NoNewline
+        Write-Host "? [Y/n] (default Y) " -ForegroundColor $ColorPrompt -NoNewline
+        $response = Read-Host
+
+        if ($response -match '^[Nn]') {
+            try {
+                Remove-LocalGroupMember -Group $GroupName -Member $member.Name -ErrorAction Stop
+                Write-Host "'$($member.Name)' removed from '$GroupName'." -ForegroundColor $ColorRemoved
+            } catch {
+                Write-Host "Failed to remove '$($member.Name)': $_" -ForegroundColor $ColorWarning
+            }
+        } else {
+            Write-Host "'$($member.Name)' kept in '$GroupName'." -ForegroundColor $ColorKept
+        }
+    }
+    Write-Host "`nReview complete for group: $GroupName" -ForegroundColor $ColorHeader
+}
 
     # Set password for all users to $TempPassword and require change at next logon
     foreach ($user in $localUsers) {
@@ -344,50 +339,78 @@ function Local-Policies {
 
 
 
-      function defensive-Countermeasures {
-    Write-Host "`n--- Starting: Defensive Countermeasures ---`n"
+function Defensive-Countermeasures {
+    Write-Host "`n--- Starting: Defensive Countermeasures ---`n" -ForegroundColor $ColorHeader
 
     try {
         # Enable Real-time Protection
-        Write-Host "Enabling Microsoft Defender Real-Time Protection..."
+        Write-Host "Enabling Microsoft Defender Real-Time Protection..." -ForegroundColor $ColorKept
         Set-MpPreference -DisableRealtimeMonitoring $false
 
         # Enable Behavior Monitoring
-        Write-Host "Enabling Behavior Monitoring..."
+        Write-Host "Enabling Behavior Monitoring..." -ForegroundColor $ColorKept
         Set-MpPreference -DisableBehaviorMonitoring $false
 
         # Enable Cloud Protection
-        Write-Host "Enabling Cloud Protection..."
+        Write-Host "Enabling Cloud Protection..." -ForegroundColor $ColorKept
         Set-MpPreference -DisableBlockAtFirstSeen $false
 
         # Enable Automatic Sample Submission
-        Write-Host "Enabling Automatic Sample Submission..."
+        Write-Host "Enabling Automatic Sample Submission..." -ForegroundColor $ColorKept
         Set-MpPreference -SubmitSamplesConsent 2  # 2 = Send safe samples automatically
 
         # Start Defender service (skip changing startup type due to permissions)
         try {
             $defenderService = Get-Service -Name "WinDefend" -ErrorAction Stop
             if ($defenderService.Status -ne 'Running') {
-                Write-Host "Starting Microsoft Defender service..."
+                Write-Host "Starting Microsoft Defender service..." -ForegroundColor $ColorKept
                 Start-Service -Name "WinDefend"
             } else {
-                Write-Host "Microsoft Defender service already running."
+                Write-Host "Microsoft Defender service already running." -ForegroundColor $ColorKept
             }
         } catch {
-            Write-Warning "Could not start or manage Microsoft Defender service: $_"
+            Write-Warning "Could not start or manage Microsoft Defender service: $_" -ForegroundColor $ColorWarning
         }
 
         # Update Microsoft Defender definitions
-        Write-Host "Updating Microsoft Defender antivirus definitions..."
+        Write-Host "Updating Microsoft Defender antivirus definitions..." -ForegroundColor $ColorKept
         Update-MpSignature -ErrorAction Stop
 
-        Write-Host "`nMicrosoft Defender is enabled and updated successfully."
+        Write-Host "`nMicrosoft Defender is enabled and updated successfully." -ForegroundColor $ColorKept
+
+        # 1. Block access to known malicious IP addresses
+        $blockIP = Read-Host "Do you want to block known malicious IP addresses? (Y/n) [Default: Y]" -ForegroundColor $ColorPrompt
+        if ($blockIP -match "^[Yy]$" -or $blockIP -eq "") {
+            Write-Host "`nBlocking access to known malicious IP addresses..." -ForegroundColor $ColorKept
+            $blockedIPs = @("192.168.1.100", "203.0.113.45")  # Add known malicious IPs
+            foreach ($ip in $blockedIPs) {
+                New-NetFirewallRule -DisplayName "Block Malware IP: $ip" -Direction Outbound -Action Block -RemoteAddress $ip
+                Write-Host "Blocked IP: $ip" -ForegroundColor $ColorRemoved
+            }
+        }
+
+        # 2. Disable unsafe file types (scripts, executables from unknown sources)
+        $disableFileTypes = Read-Host "Do you want to disable unsafe file types from running? (Y/n) [Default: Y]" -ForegroundColor $ColorPrompt
+        if ($disableFileTypes -match "^[Yy]$" -or $disableFileTypes -eq "") {
+            Write-Host "`nDisabling dangerous file extensions from running..." -ForegroundColor $ColorKept
+            Set-ExecutionPolicy -ExecutionPolicy Restricted -Scope LocalMachine  # Restrict script execution
+            Write-Host "File execution policy set to 'Restricted'." -ForegroundColor $ColorKept
+        }
+
+        # 3. Monitor registry for malicious changes
+        $monitorRegistry = Read-Host "Do you want to monitor and block registry changes by malware? (Y/n) [Default: Y]" -ForegroundColor $ColorPrompt
+        if ($monitorRegistry -match "^[Yy]$" -or $monitorRegistry -eq "") {
+            Write-Host "`nMonitoring and blocking registry changes by malware..." -ForegroundColor $ColorKept
+            New-Item -Path "HKLM:\Software\Policies\Microsoft\Windows\System" -Name "DisableRegistryTools" -Force | Out-Null
+            Set-ItemProperty -Path "HKLM:\Software\Policies\Microsoft\Windows\System" -Name "DisableRegistryTools" -Value 1
+            Write-Host "Registry editing is now disabled." -ForegroundColor $ColorKept
+        }
 
     } catch {
         Write-Host "An error occurred: $_" -ForegroundColor Red
     }
 
-    Write-Host "`n--- Defensive Countermeasures Complete ---`n"
+    Write-Host "`n--- Defensive Countermeasures Complete ---`n" -ForegroundColor $ColorHeader
 }
 
 
@@ -936,9 +959,45 @@ function unwanted-Software {
     Write-Host "`n--- Unwanted Software Scan Complete ---`n"
 }
 
-function malware {
-    Write-Host "`n--- Starting: Malware ---`n"
+function Malware {
+    Write-Host "`n--- Starting: Malware Protection & Removal ---`n" -ForegroundColor $ColorHeader
+
+    # 1. Run a full system scan with Windows Defender
+    $runScan = Read-Host "Do you want to run a full scan with Windows Defender? (Y/n) [Default: Y]" -ForegroundColor $ColorPrompt
+    if ($runScan -match "^[Yy]$" -or $runScan -eq "") {
+        Write-Host "`nRunning a full scan with Windows Defender..." -ForegroundColor $ColorKept
+        Start-MpScan -ScanType FullScan
+        Write-Host "Full system scan completed. Review the scan report for any threats." -ForegroundColor $ColorKept
+    }
+
+    # 2. Remove malicious files detected by Windows Defender
+    $removeThreats = Read-Host "Do you want to remove malicious files detected by Windows Defender? (Y/n) [Default: Y]" -ForegroundColor $ColorPrompt
+    if ($removeThreats -match "^[Yy]$" -or $removeThreats -eq "") {
+        Write-Host "`nChecking for quarantined files and removing them..." -ForegroundColor $ColorKept
+        $quarantineItems = Get-MpThreatDetection | Where-Object {$_.Action -eq "Quarantine"}
+        if ($quarantineItems) {
+            foreach ($item in $quarantineItems) {
+                Remove-MpThreat -ThreatID $item.ThreatID
+                Write-Host "Removed threat: $($item.ThreatName)" -ForegroundColor $ColorRemoved
+            }
+        } else {
+            Write-Host "No quarantined files found." -ForegroundColor $ColorKept
+        }
+    }
+
+    # 3. Clear temporary files (may contain malware payloads)
+    $clearTempFiles = Read-Host "Do you want to clear temporary files? (Y/n) [Default: Y]" -ForegroundColor $ColorPrompt
+    if ($clearTempFiles -match "^[Yy]$" -or $clearTempFiles -eq "") {
+        Write-Host "`nClearing temporary files..." -ForegroundColor $ColorKept
+        Remove-Item -Path "C:\Windows\Temp\*" -Recurse -Force -ErrorAction SilentlyContinue
+        Remove-Item -Path "$env:TEMP\*" -Recurse -Force -ErrorAction SilentlyContinue
+        Write-Host "Temporary files cleared." -ForegroundColor $ColorKept
+    }
+
+    Write-Host "`n--- Malware Protection & Removal Complete ---`n" -ForegroundColor $ColorHeader
 }
+
+
 function application-Security-Settings {
     Write-Host "`n--- Starting: Application Security Settings ---`n"
 
@@ -1248,6 +1307,9 @@ function application-Security-Settings {
     }
 } while ($true)
 # IF ANY ISSUES CHECK THESE 
-# Option 5 added new functions
+# Option 5 added new functions if issues arise check the menu option 
 # New Additions to the App Security Settings function: trying to pull from document system function file for installed programs list 
+#New functions and colors for malware section added 
+#Moved group auditing to its user auditing so if issues arise check that section
+# Also updated the defensive countermeasures section to include the new color variables and new functions so check there if issues arise
 

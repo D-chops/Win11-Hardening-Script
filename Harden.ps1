@@ -1121,6 +1121,77 @@ function application-Security-Settings {
                     }
                 } else {
                     Write-Host "Internet Explorer does not appear to be present or is already disabled."
+
+                    # --- Optional: Unistall Installed Programs ----
+                    $PUSER = [Systerm.Security.Principal.WindowsIdentity]::GetCurrent().Name.Split('\')[-1]
+                    $programsfile = "C:\Users\$PUSER\Desktop\Docs\Programs.txt"
+            if (Test-Path $programsFile) {
+    $promptUninstall = Read-Host "Would you like to review installed programs for uninstallation? (Y/n) [Default: n]"
+    if ($promptUninstall -match "^[Yy]$") {
+        $programLines = Get-Content $programsFile | Where-Object { $_.Trim() -ne "" -and $_ -match "DisplayName" }
+
+        $programs = @()
+        foreach ($line in $programLines) {
+            $name = $line -replace ".*DisplayName\s*:\s*", ""
+            if ($name -and $name.Trim() -ne "") {
+                $programs += $name.Trim()
+            }
+        }
+
+        $programs = $programs | Sort-Object -Unique
+        if ($programs.Count -eq 0) {
+            Write-Host "No programs found in list." -ForegroundColor Yellow
+        } else {
+            Write-Host "`n--- Installed Programs ---`n"
+            for ($i = 0; $i -lt $programs.Count; $i++) {
+                Write-Host "[$($i+1)] $($programs[$i])"
+            }
+
+            $selection = Read-Host "Enter the number(s) of programs to uninstall (comma-separated), or press Enter to skip"
+            if ($selection -match "\d") {
+                $indexes = $selection -split "," | ForEach-Object { ($_ -as [int]) - 1 }
+                foreach ($i in $indexes) {
+                    if ($i -ge 0 -and $i -lt $programs.Count) {
+                        $targetProgram = $programs[$i]
+                        Write-Host "Attempting to uninstall: $targetProgram"
+
+                        # Try to find and run the uninstall string from registry
+                        $registryPaths = @(
+                            "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*",
+                            "HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*",
+                            "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*"
+                        )
+
+                        $found = $false
+                        foreach ($regPath in $registryPaths) {
+                            $apps = Get-ItemProperty $regPath -ErrorAction SilentlyContinue | Where-Object {
+                                $_.DisplayName -and $_.DisplayName -like "*$targetProgram*"
+                            }
+
+                            foreach ($app in $apps) {
+                                if ($app.UninstallString) {
+                                    Write-Host "Running uninstaller for: $($app.DisplayName)"
+                                    Start-Process -FilePath "cmd.exe" -ArgumentList "/c", "$($app.UninstallString)" -Verb RunAs
+                                    $found = $true
+                                    break
+                                }
+                            }
+                            if ($found) { break }
+                        }
+
+                        if (-not $found) {
+                            Write-Host "Could not find uninstall command for $targetProgram." -ForegroundColor Yellow
+                        }
+                    }
+                }
+            } else {
+                Write-Host "Skipping uninstallation."
+            }
+        }
+    }
+} else {
+    Write-Host "Installed programs list not found at $programsFile" -ForegroundColor Yellow
+}
                 }
             }
         }
@@ -1176,3 +1247,7 @@ function application-Security-Settings {
         default { Write-Host "`nInvalid selection. Please try again." }
     }
 } while ($true)
+# IF ANY ISSUES CHECK THESE 
+# Option 5 added new functions
+# New Additions to the App Security Settings function: trying to pull from document system function file for installed programs list 
+

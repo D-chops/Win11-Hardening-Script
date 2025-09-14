@@ -879,6 +879,100 @@ function application-Updates {
 
 function prohibited-Files {
     Write-Host "`n--- Starting: Prohibited Files ---`n"
+    
+    # List of prohibited file patterns or specific file names (add more as needed)
+    $prohibitedFilesList = @(
+        "malware.exe",
+        "piratedSoftware*.exe",
+        "illegalFile*.zip",
+        "unwantedTool*.dll"
+        # Add other patterns or file names here as needed
+    )
+
+    # Define the base path to search for prohibited files (you can adjust this)
+    $baseSearchPaths = @(
+        "C:\Users",
+        "C:\Program Files",
+        "C:\Windows\System32"
+    )
+
+    # Initialize an array to store found prohibited files
+    $foundProhibitedFiles = @()
+
+    # Loop through each base search path
+    foreach ($path in $baseSearchPaths) {
+        Write-Host "Searching in: $path" -ForegroundColor Cyan
+        try {
+            # Search for prohibited files based on patterns in the list
+            $foundFiles = Get-ChildItem -Path $path -Recurse -File -ErrorAction SilentlyContinue | 
+                Where-Object { 
+                    $file = $_
+                    $prohibitedFilesList | ForEach-Object {
+                        $file.Name -like $_
+                    }
+                }
+            
+            # If prohibited files are found, add to the list
+            if ($foundFiles.Count -gt 0) {
+                $foundProhibitedFiles += $foundFiles
+            }
+        } catch {
+            Write-Host "Error accessing $path: $_" -ForegroundColor Red
+        }
+    }
+
+    # If no prohibited files are found, exit the function
+    if ($foundProhibitedFiles.Count -eq 0) {
+        Write-Host "No prohibited files were found." -ForegroundColor Green
+        return
+    }
+
+    # Display the found prohibited files
+    Write-Host "Found the following prohibited files:" -ForegroundColor Red
+    $foundProhibitedFiles | ForEach-Object { Write-Host "- $($_.FullName)" }
+
+    # Ask the user what action to take
+    $choice = Read-Host "Type 'delete' to delete all found files, 'prompt' to delete one by one, or 'no' to cancel [delete/prompt/no] (default: prompt)"
+
+    function Delete-ProhibitedFile {
+        param (
+            [string]$filePath
+        )
+
+        try {
+            Remove-Item -Path $filePath -Force -ErrorAction Stop
+            Write-Host "Deleted: $filePath" -ForegroundColor Green
+        } catch {
+            Write-Host "Failed to delete $filePath: $_" -ForegroundColor Red
+        }
+    }
+
+    switch ($choice.ToLower()) {
+        "delete" {
+            # Delete all found prohibited files
+            foreach ($file in $foundProhibitedFiles) {
+                Delete-ProhibitedFile -filePath $file.FullName
+            }
+        }
+        "prompt" {
+            # Ask the user to delete each found prohibited file one by one
+            foreach ($file in $foundProhibitedFiles) {
+                $answer = Read-Host "Delete $($file.FullName)? (Y/n)"
+                if ($answer -match '^[Yy]$') {
+                    Delete-ProhibitedFile -filePath $file.FullName
+                } else {
+                    Write-Host "Skipped deleting $($file.FullName)." -ForegroundColor Yellow
+                }
+            }
+        }
+        default {
+            Write-Host "Operation cancelled." -ForegroundColor Red
+        }
+    }
+
+    Write-Host "`n--- Prohibited Files Intake Complete ---`n"
+}
+
 }
 function unwanted-Software {
     Write-Host "`n--- Starting: Unwanted Software Scan ---`n"
@@ -1038,6 +1132,29 @@ function Malware {
 
 function application-Security-Settings {
     Write-Host "`n--- Starting: Application Security Settings ---`n"
+
+    Write-Host "`n--- Restricting execution of untrusted applications for non-admin users ---"
+    
+    # Check if the current user is an administrator
+    $currentUser = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $adminRole = [Security.Principal.WindowsBuiltInRole]::Administrator
+    $isAdmin = $currentUser.Groups -contains (New-Object Security.Principal.NTAccount("BUILTIN", "Administrators")).Translate([Security.Principal.SecurityIdentifier]).Value
+
+    if ($isAdmin) {
+        Write-Host "Current user is an administrator. Skipping execution policy change."
+        return
+    }
+
+    # Apply the execution policy restriction for non-admin users
+    try {
+        # Set the execution policy to 'Restricted' for all users (non-admins will be affected by this)
+        Set-ExecutionPolicy -ExecutionPolicy Restricted -Scope LocalMachine -Force
+        Write-Host "Execution Policy set to Restricted for all non-admin users."
+    }
+    catch {
+        Write-Host "Failed to set execution policy: $_" -ForegroundColor Red
+    }
+}
 
     # Detect default browser from registry
     $defaultBrowser = $null
@@ -1292,10 +1409,10 @@ function application-Security-Settings {
                 }
             }
         }
+        Write-Host "`n--- Application Security Settings Complete ---`n"
     }
 
-    Write-Host "`n--- Application Security Settings Complete ---`n"
-}
+    
 
 # Menu loop
 :menu do {
@@ -1335,5 +1452,6 @@ function application-Security-Settings {
 #rewrote enable updates section 
 #Also added in the unwanted software section the ability to delete the everything folders found during the document system function
 # Have fun finding any needle in the haystack
+# Added code into the prohibited files section to search for specific file names or patterns and delete them based on user input
 
 

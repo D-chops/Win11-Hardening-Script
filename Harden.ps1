@@ -60,43 +60,125 @@ $menuOptions = @(
 
 function Document-System {
     Write-Host "`n--- Starting: Document the system ---`n"
-$PUSER = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name.Split('\')[-1]
-$folderPath = "C:\Users\$PUSER\Desktop\DOCS"
 
-if (-not (Test-Path -Path $folderPath)) {
-    New-Item -Path $folderPath -ItemType Directory | Out-Null
-    Write-Host "Created folder: $folderPath"
-} else {
-    Write-Host "Folder already exists: $folderPath"
+    # Define folder for document storage
+    $PUSER = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name.Split('\')[-1]
+    $folderPath = "C:\Users\$PUSER\Desktop\DOCS"
+
+    # Create folder if not exists
+    if (-not (Test-Path -Path $folderPath)) {
+        New-Item -Path $folderPath -ItemType Directory | Out-Null
+        Write-Host "Created folder: $folderPath"
+    } else {
+        Write-Host "Folder already exists: $folderPath"
+    }
+
+    $DOCS = "C:\Users\$PUSER\Desktop\DOCS"
+
+    # Save list of local users
+    Write-Host "Saving list of local users..." -ForegroundColor $ColorHeader
+    Get-LocalUser | Out-File -FilePath "$DOCS\LocalUsers.txt"
+    
+    # Save list of administrators
+    Write-Host "Saving list of administrators..." -ForegroundColor $ColorHeader
+    Get-LocalGroupMember -Group 'Administrators' | Out-File -FilePath "$DOCS\administrators.txt"
+
+    # Save list of installed programs with their install locations
+    Write-Host "Saving installed programs with their install locations..." -ForegroundColor $ColorHeader
+    Get-ItemProperty HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\* |
+        Select-Object DisplayName, DisplayVersion, Publisher, InstallDate, InstallLocation |
+        Where-Object { $_.InstallLocation -ne $null } |  # Only include entries with an install location
+        Out-File -FilePath "$DOCS\programs_with_locations.txt"
+    Write-Host "Installed programs with locations saved to programs_with_locations.txt" -ForegroundColor $ColorKept
+
+    # Unwanted Software Detection
+    Write-Host "Checking for unwanted software..." -ForegroundColor $ColorHeader
+    $blacklist = @(
+        "MyUnwantedApp1",        # Example unwanted software
+        "AdwareProgram",         # Example unwanted software
+        "ToolbarApp",            # Example unwanted software
+        "PUPSoftware",           # Example potentially unwanted program
+        "BloatwareProgram"       # Example bloatware
+    )
+    
+    $unwantedPrograms = Get-ItemProperty HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\* |
+        Select-Object DisplayName, Publisher, DisplayVersion, InstallDate, InstallLocation |
+        Where-Object {
+            $blacklist -contains $_.DisplayName -or
+            $_.Publisher -eq $null -or
+            $_.DisplayName -match ".*toolbar.*" -or
+            $_.DisplayName -match ".*adware.*" -or
+            $_.DisplayName -match ".*bloatware.*"
+        }
+    
+    if ($unwantedPrograms) {
+        Write-Host "`nUnwanted Software Found:" -ForegroundColor $ColorWarning
+        $unwantedPrograms | Format-Table DisplayName, Publisher, DisplayVersion, InstallLocation
+        $unwantedPrograms | Out-File -FilePath "$DOCS\unwanted-software.txt"
+        Write-Host "`nUnwanted software list saved to: $DOCS\unwanted-software.txt" -ForegroundColor $ColorKept
+    } else {
+        Write-Host "No unwanted software found." -ForegroundColor $ColorKept
+    }
+
+    # Save list of running services
+    Write-Host "Saving list of running services..." -ForegroundColor $ColorHeader
+    Get-Service | Where-Object {$_.Status -eq 'Running'} | Out-File -FilePath "$DOCS\services.txt"
+
+    # Save list of installed Windows optional features (Windows 10/11)
+    Write-Host "Saving list of installed Windows optional features..." -ForegroundColor $ColorHeader
+    Get-WindowsOptionalFeature -Online | Where-Object {$_.State -eq 'Enabled'} | Out-File -FilePath "$DOCS\features.txt"
+
+    # Export security configuration
+    Write-Host "Exporting security configuration..." -ForegroundColor $ColorHeader
+    secedit /export /cfg "$DOCS\secedit-export.inf"
+
+    # Save Windows Defender preferences
+    Write-Host "Saving Windows Defender preferences..." -ForegroundColor $ColorHeader
+    Get-MpPreference | Out-File -FilePath "$DOCS\defender.txt"
+
+    # Save list of scheduled tasks
+    Write-Host "Saving list of scheduled tasks..." -ForegroundColor $ColorHeader
+    Get-ScheduledTask | Out-File -FilePath "$DOCS\scheduled-tasks.txt"
+
+    Write-Host "`n--- Documenting the system is complete ---`n" -ForegroundColor $ColorHeader
 }
-$PUSER = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name.Split('\')[-1]
-$DOCS = "C:\Users\$PUSER\Desktop\DOCS"
-Get-LocalUser | Out-File -FilePath "$DOCS\LocalUsers.txt"
-# Save list of administrators
-Get-LocalGroupMember -Group 'Administrators' | Out-File -FilePath "$DOCS\administrators.txt"
 
-# Save list of installed programs
-Get-ItemProperty HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\* |
-    Select-Object DisplayName, DisplayVersion, Publisher, InstallDate |
-    Out-File -FilePath "$DOCS\programs.txt"
-
-# Save list of running services
-Get-Service | Where-Object {$_.Status -eq 'Running'} | Out-File -FilePath "$DOCS\services.txt"
-
-# Save list of installed Windows optional features (Windows 10/11)
-Get-WindowsOptionalFeature -Online | Where-Object {$_.State -eq 'Enabled'} | Out-File -FilePath "$DOCS\features.txt"
-
-# Export security configuration
-secedit /export /cfg "$DOCS\secedit-export.inf"
-
-# Save Windows Defender preferences
-Get-MpPreference | Out-File -FilePath "$DOCS\defender.txt"
-
-# Save list of scheduled tasks
-Get-ScheduledTask | Out-File -FilePath "$DOCS\scheduled-tasks.txt"
-}
 function Enable-Updates {
     Write-Host "`n--- Starting: Enable updates ---`n"
+    try{
+        # Ensures the windows updates service is running
+        Write-Host "Starting Windows Update service..." -ForegroundColor $ColorHeader
+        $updateService = Get-Service -Name "wuauserv"
+        if ($updateService.Status -ne 'Running') {
+            Start-Service -Name "wuauserv"
+            Write-Host "Windows Update service started." -ForegroundColor $ColorKept
+        } else {
+            Write-Host "Windows Update service is already running." -ForegroundColor $ColorKept
+        }
+        # Set windows update to automatic (With Delayed Action)
+        Write-Host "Setting Windows Update service to Automatic (Delayed Start)..." -ForegroundColor $ColorHeader
+        Set-Service -Name "wuauserv" -StartupType Automatic
+        Write-Host "Windows Update service startup type set to Automatic." -ForegroundColor $ColorKept
+
+        #Set the registry to enable automatic updates
+        Set-ItemProperty -path $autoUpdatekey -Name "AUOptions" -Value 4 # 4 = Auto download and schedule the install
+
+        # Also Set the scheduled install day and time to ensure updates are applied
+        Set-ItemProperty -path $autoUpdatekey -Name "ScheduledInstallDay" -Value 0 # 0 = Every day
+        Set-ItemProperty -path $autoUpdatekey -Name "ScheduledInstallTime" -Value 3 # 3 = 3 AM
+        Write-host "Windows Updates are now enabled and set to automaticaly download and install updates" -Foregroundcolor $ColorKept
+
+        #Configure Auto Update settings
+        $updateConfig = Get-WmiObject -Class "Win32_OperatingSystem" | Select-Object -ExpandProperty "AutomaticManagedPagefile"
+        if ($updateConfig -ne "True") {
+            Write-Host "Configuring Automatic Updates to Enabled" -ForegroundColor $ColorHeader
+            Set-WmiInstance -Class "Win32_OperatingSystem" -Arguments @{AutomaticManagedPagefile="True"}
+        }
+    }
+    Write-Host "`n--- Enable updates Complete ---`n"
+    catch {
+        Write-Host "Failed to enable updates: $_" -ForegroundColor $ColorWarning
+    }
 }
 
 function User-Auditing {
@@ -262,81 +344,73 @@ function Account-Policies {
 #  Function Definitions
 # =========================
 function Local-Policies {
-    param (
-        [bool]$AuditLogonFailure,
-        [bool]$TakeOwnershipRestricted,
-        [bool]$RequireCtrlAltDel
-    )
+   Write-Host "n--- Starting: Local Policies ---n"
 
-    $secpolInf = Join-Path -Path $env:TEMP -ChildPath "secpol.inf"
-
-    # Export current security policy to file
-    secedit /export /cfg $secpolInf | Out-Null
-    $content = Get-Content $secpolInf -Raw
-
-    function Update-SecPolSetting {
-        param (
-            [string]$Key,
-            [string]$Value
-        )
-
-        if ($content -match "^\s*$Key\s*=") {
-            # Replace existing line
-            $pattern = "^\s*$Key\s*=.*$"
-            $content = $content -replace $pattern, "$Key = $Value"
-        }
-        else {
-            # Add new setting
-            $content += "`r`n$Key = $Value"
-        }
-    }
-
-    # === Audit Logon Events (Failure) ===
-    if ($PSBoundParameters.ContainsKey('AuditLogonFailure')) {
-        if ($AuditLogonFailure) {
-            Write-Host "[*] Enabling Audit Logon [Failure]..."
-            Update-SecPolSetting -Key "AuditLogonEvents" -Value "0 1"
-        }
-        else {
-            Write-Host "[*] Disabling Audit Logon [Failure]..."
-            Update-SecPolSetting -Key "AuditLogonEvents" -Value "0 0"
-        }
-    }
-
-    # === Take Ownership Privilege ===
-    if ($PSBoundParameters.ContainsKey('TakeOwnershipRestricted')) {
-        if ($TakeOwnershipRestricted) {
-            Write-Host "[*] Restricting SeTakeOwnershipPrivilege to Administrators..."
-            Update-SecPolSetting -Key "SeTakeOwnershipPrivilege" -Value "*S-1-5-32-544"
-        }
-        else {
-            Write-Host "[*] Allowing SeTakeOwnershipPrivilege (removing restriction)..."
-            Update-SecPolSetting -Key "SeTakeOwnershipPrivilege" -Value ""
-        }
-    }
-
-    # === CTRL+ALT+DEL Requirement ===
-    if ($PSBoundParameters.ContainsKey('RequireCtrlAltDel')) {
-        if ($RequireCtrlAltDel) {
-            Write-Host "[*] Enforcing CTRL+ALT+DEL requirement for logon..."
-            Update-SecPolSetting -Key "DisableCAD" -Value "0"
-        }
-        else {
-            Write-Host "[*] Disabling CTRL+ALT+DEL requirement for logon..."
-            Update-SecPolSetting -Key "DisableCAD" -Value "1"
-        }
-    }
-
-    # Save updated content back to secpol.inf
-    Set-Content -Path $secpolInf -Value $content -Encoding ASCII
-
-    # Apply the updated security policy
-    Write-Host "[*] Applying updated security policies..."
-    echo y | secedit /configure /cfg $secpolInf /overwrite | Out-Null
-
-    Write-Host "[+] Policies applied successfully."
+   #Options to enable\disable audit logon events
+    $auditLogon = Read-Host "Would you like to enable auditing for Logon Events? (Y/n) [Default: Y]" -ForegroundColor $ColorPrompt
+    if ($auditLogon -match "^[Yy]$" -or $auditLogon -eq "") {
+        Write-Host "Enabling auditing for Logon Events..." -ForegroundColor $ColorHeader
+    try {
+        # Enable Audit logon events
+        auditpol /set /subcategory:"Logon/Logoff" /success:enable /failure:enable
+        Write-Host "Auditing for Logon Events enabled." -ForegroundColor $ColorKept
+    } catch {
+        Write-Host "Failed to enable auditing for Logon Events: $_" -ForegroundColor $ColorWarning
 }
-
+    } elseif ($auditlogin -match "^[Nn]$") {
+        Write-Host "Disabling audit logon events..." -ForegroundColor $ColorHeader
+       try { 
+        # Disable Audit logon events
+        auditpol /set /subcategory:"Logon/Logoff" /success:disable /failure:disable
+        Write-Host "Auditing for Logon Events disabled." -ForegroundColor $ColorRemoved
+    } catch {
+        Write-Host "Failed to disable auditing for Logon Events: $_" -ForegroundColor $ColorWarning
+    }
+}
+ 
+  #Option to Enable\Disable Take Ownership Privilege 
+  $takeOwnership = Read-Host "Do yo want to enable Take Ownership Privilege? (Y/N) [Default: Y]" -ForegroundColor $ColorPrompt
+  if ($takeOwnership -match "^[Yy]$" -or $takeOwnership -eq "") 
+    Write-Host " Enabling Take Ownership Privilege..." -ForegroundColor $ColorHeader
+    try {
+        #Enable Take Ownership Privilege
+        $regPath = "HKLM:\Software\Microsoft\Windows NT\CurrentVersion\SeDenyInteractiveLogonRight"
+        Set-ItemProperty -Path $ regPath -Name "SeTakeOwnershipPrivilege" -Value 1
+        Write-Host "Take Ownership Privilege enabled." -ForegroundColor $ColorKept
+    } catch {
+        Write-Host "Failed to enable Take Ownership Privilege: $_" -ForegroundColor $ColorWarning
+    }
+    } elseif ($takeOwnership -match "^[Nn]$") 
+        Write-Host "Disabling Take Ownership Privilege..." -ForegroundColor $ColorHeader
+         try {
+            #Disable Take Ownership Privilege
+            Remove-ItemProperty -Path $regPath -Name "SeTakeOwnershipPrivilege"
+            Write-Host "Take Ownership Privilege disabled." -ForegroundColor $ColorRemoved
+        } catch {
+            Write-Host "Failed to disable Take Ownership Privilege: $_" -ForegroundColor $ColorWarning
+        }
+     
+    # Option to enable\disable ctrl+alt+del requirement for logon
+    $ctrlAltDel = Read-Host "Would you like to enable Ctrl+Alt+Del requirement for logon? (Y/n) [Default: Y]" -ForegroundColor $ColorPrompt
+    if ($ctrlAltDel -match "^[Yy]$" -or $ctrlAltDel -eq "") {
+        Write-Host "Enabling Ctrl+Alt+Del requirement for logon..." -ForegroundColor $ColorHeader
+        try {
+            # Enable Ctrl+Alt+Del requirement for logon
+            Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" 
+            Write-Host "Ctrl+Alt+Del requirement for logon enabled." -ForegroundColor $ColorKept
+        } catch {
+            Write-Host "Failed to enable Ctrl+Alt+Del requirement: $_" -ForegroundColor $ColorWarning
+        }
+    } elseif ($ctrlAltDel -match "^[Nn]$") {
+        Write-Host "Disabling Ctrl+Alt+Del requirement for logon..." -ForegroundColor $ColorHeader
+        try {
+            # Disable Ctrl+Alt+Del requirement for logon
+            Set-ItemProperty -Path $regPath -Name "DisableCAD" -Value 1
+            Write-Host "Ctrl+Alt+Del requirement for logon disabled." -ForegroundColor $ColorRemoved
+        } catch {
+            Write-Host "Failed to disable Ctrl+Alt+Del requirement: $_" -ForegroundColor $ColorWarning
+        }
+    }
 
 
 function Defensive-Countermeasures {
@@ -809,150 +883,114 @@ function prohibited-Files {
 function unwanted-Software {
     Write-Host "`n--- Starting: Unwanted Software Scan ---`n"
 
-    # List of unwanted software display names (add as needed)
-    $unwantedSoftwareList = @(
-        "Angry IP Scanner"
-        # Add other unwanted software here if needed
-    )
+    # Define the path to the unwanted software document
+    $DOCS = "C:\Users\$PUSER\Desktop\DOCS"
+    $unwantedFilePath = "$DOCS\unwanted-software.txt"
 
-    # Base path to search for the "everything" folder
-    $basePath = "C:\inetpub"
-
-    # Debug: Confirm base path exists
-    if (-Not (Test-Path $basePath)) {
-        Write-Host "Base path $basePath does NOT exist. Skipping folder search."
-        $everythingFolders = @()
-    }
-    else {
-        # Search recursively for any folder named "everything" under C:\inetpub
-        Write-Host "Searching for folder named 'everything' under $basePath ..."
-        try {
-            $everythingFolders = Get-ChildItem -Path $basePath -Directory -Recurse -ErrorAction Stop |
-                Where-Object { $_.Name -ieq "everything" }
-        }
-        catch {
-            Write-Host "Error during folder search: $_"
-            $everythingFolders = @()
-        }
-    }
-
-    if ($everythingFolders.Count -eq 0) {
-        Write-Host "No 'everything' folder found under $basePath"
-    } else {
-        Write-Host "Found the following 'everything' folder(s):"
-        $everythingFolders | ForEach-Object { Write-Host "- $($_.FullName)" }
-    }
-
-    # Get all installed software from uninstall registry keys
-    $installedSoftware = @()
-
-    $registryPaths = @(
-        "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*",
-        "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*",
-        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*"
-    )
-
-    foreach ($path in $registryPaths) {
-        Write-Host "Checking registry path: $path"
-        try {
-            $items = Get-ItemProperty -Path $path -ErrorAction Stop | Where-Object { $_.DisplayName }
-            if ($items) {
-                Write-Host "Found $($items.Count) entries at $path"
-                $installedSoftware += $items
-            }
-        }
-      catch {
-    Write-Host "Failed to read registry path "${path}:"$_"
-   }
-    }
-
-    # Filter installed software for unwanted items
-    $foundUnwanted = @()
-
-    foreach ($software in $installedSoftware) {
-        foreach ($unwanted in $unwantedSoftwareList) {
-            if ($software.DisplayName -like "*$unwanted*") {
-                Write-Host "Matched unwanted software: $($software.DisplayName)"
-                $foundUnwanted += $software
-            }
-        }
-    }
-
-    if ($foundUnwanted.Count -eq 0 -and $everythingFolders.Count -eq 0) {
-        Write-Host "No unwanted software or folders found."
+    # Check if the unwanted software document exists
+    if (-Not (Test-Path -Path $unwantedFilePath)) {
+        Write-Host "Unwanted software document not found at $unwantedFilePath. Please run Document-System function first." -ForegroundColor Red
         return
     }
 
-    # Show found unwanted software
-    if ($foundUnwanted.Count -gt 0) {
-        Write-Host "Found the following unwanted software:"
-        $foundUnwanted | ForEach-Object { Write-Host "- $($_.DisplayName)" }
+    # Read the unwanted software document
+    $unwantedSoftwareList = Get-Content -Path $unwantedFilePath | Select-String -Pattern "DisplayName" | ForEach-Object { $_.Line }
+
+    # Check if any unwanted software is found
+    if ($unwantedSoftwareList.Count -eq 0) {
+        Write-Host "No unwanted software found in the document." -ForegroundColor Green
+        return
     }
 
+    # Display the unwanted software to the user
+    Write-Host "Found the following unwanted software:" -ForegroundColor Yellow
+    $unwantedSoftwareList | ForEach-Object { Write-Host "- $_" }
+
     # Ask user for action
-    $choice = Read-Host "Type 'all' to uninstall everything and delete folders automatically, 'prompt' to uninstall one by one, or 'no' to cancel [all/prompt/no] (default: prompt)"
+    $choice = Read-Host "Type 'all' to uninstall everything listed, 'prompt' to uninstall one by one, or 'no' to cancel [all/prompt/no] (default: prompt)"
 
     function Uninstall-Software {
         param (
-            [string]$UninstallString,
             [string]$DisplayName
         )
-        if ($UninstallString) {
+        # Query the uninstall string for each software
+        $software = Get-WmiObject -Class Win32_Product | Where-Object { $_.Name -eq $DisplayName }
+        
+        if ($software) {
             Write-Host "Uninstalling $DisplayName ..."
-            $cleanUninstall = $UninstallString -replace '"', ''
+            $uninstallString = $software.UninstallString
 
-            if ($cleanUninstall -match "msiexec") {
-                $productCode = ($cleanUninstall -replace ".*\/x\s*", "")
-                Start-Process -FilePath "msiexec.exe" -ArgumentList "/x $productCode /qn /norestart" -Wait -NoNewWindow
+            if ($uninstallString) {
+                # Run the uninstall command
+                Start-Process -FilePath $uninstallString -ArgumentList "/S" -Wait -NoNewWindow
+                Write-Host "$DisplayName uninstalled." -ForegroundColor Green
             } else {
-                Start-Process -FilePath $cleanUninstall -ArgumentList "/S" -Wait -NoNewWindow
+                Write-Host "No uninstall string found for $DisplayName. Manual uninstall may be required." -ForegroundColor Red
             }
-
-            Write-Host "$DisplayName uninstalled."
         } else {
-            Write-Host "No uninstall string found for $DisplayName. Manual uninstall may be required."
+            Write-Host "$DisplayName not found in installed software list." -ForegroundColor Red
         }
     }
 
     switch ($choice.ToLower()) {
         "all" {
-            foreach ($app in $foundUnwanted) {
-                Uninstall-Software -UninstallString $app.UninstallString -DisplayName $app.DisplayName
-            }
-            foreach ($folder in $everythingFolders) {
-                try {
-                    Remove-Item -Path $folder.FullName -Recurse -Force -ErrorAction Stop
-                    Write-Host "Deleted folder: $($folder.FullName)"
-                } catch {
-                    Write-Host "Failed to delete $($folder.FullName): $_"
-                }
+            foreach ($softwareName in $unwantedSoftwareList) {
+                Uninstall-Software -DisplayName $softwareName
             }
         }
         "prompt" {
-            foreach ($app in $foundUnwanted) {
-                $answer = Read-Host "Uninstall $($app.DisplayName)? (Y/n)"
+            foreach ($softwareName in $unwantedSoftwareList) {
+                $answer = Read-Host "Uninstall $softwareName? (Y/n)"
                 if ($answer -match '^[Yy]$') {
-                    Uninstall-Software -UninstallString $app.UninstallString -DisplayName $app.DisplayName
+                    Uninstall-Software -DisplayName $softwareName
                 } else {
-                    Write-Host "Skipped $($app.DisplayName)."
-                }
-            }
-            foreach ($folder in $everythingFolders) {
-                $deleteFolder = Read-Host "Delete folder $($folder.FullName)? (Y/n)"
-                if ($deleteFolder -match '^[Yy]$') {
-                    try {
-                        Remove-Item -Path $folder.FullName -Recurse -Force -ErrorAction Stop
-                        Write-Host "Deleted folder: $($folder.FullName)"
-                    } catch {
-                        Write-Host "Failed to delete $($folder.FullName): $_"
-                    }
-                } else {
-                    Write-Host "Skipped deleting $($folder.FullName)."
+                    Write-Host "Skipped $softwareName." -ForegroundColor Yellow
                 }
             }
         }
         default {
-            Write-Host "Operation cancelled."
+            Write-Host "Operation cancelled." -ForegroundColor Red
+        }
+    }
+
+    # Ask user to delete unwanted folders (optional part)
+    $deleteFolders = Read-Host "Would you like to delete the 'everything' folders found during Document-System? (Y/n)"
+    if ($deleteFolders -match '^[Yy]$') {
+        # Path to the 'everything' folders (if they exist)
+        $basePath = "C:\inetpub"
+        
+        if (-Not (Test-Path $basePath)) {
+            Write-Host "Base path $basePath does not exist." -ForegroundColor Red
+        } else {
+            Write-Host "Searching for unwanted folders named 'everything' under $basePath..."
+            try {
+                $everythingFolders = Get-ChildItem -Path $basePath -Directory -Recurse -ErrorAction Stop |
+                    Where-Object { $_.Name -ieq "everything" }
+
+                if ($everythingFolders.Count -eq 0) {
+                    Write-Host "No 'everything' folders found." -ForegroundColor Green
+                } else {
+                    Write-Host "Found the following 'everything' folder(s):" -ForegroundColor Yellow
+                    $everythingFolders | ForEach-Object { Write-Host "- $($_.FullName)" }
+
+                    # Ask user for action on each folder
+                    foreach ($folder in $everythingFolders) {
+                        $deleteFolder = Read-Host "Delete folder $($folder.FullName)? (Y/n)"
+                        if ($deleteFolder -match '^[Yy]$') {
+                            try {
+                                Remove-Item -Path $folder.FullName -Recurse -Force -ErrorAction Stop
+                                Write-Host "Deleted folder: $($folder.FullName)" -ForegroundColor Green
+                            } catch {
+                                Write-Host "Failed to delete $($folder.FullName): $_" -ForegroundColor Red
+                            }
+                        } else {
+                            Write-Host "Skipped deleting $($folder.FullName)." -ForegroundColor Yellow
+                        }
+                    }
+                }
+            } catch {
+                Write-Host "Error searching for 'everything' folders: $_" -ForegroundColor Red
+            }
         }
     }
 
@@ -1273,26 +1311,7 @@ function application-Security-Settings {
         "2" { Enable-Updates }
         "3" { User-Auditing }
         "4" { account-Policies }
-        "5" {
-    Clear-Host
-
-    # Prompt user and get raw input as strings
-    $auditLogonInput = Read-Host "Enable Audit Logon Failure? (Y/N)"
-    $takeOwnershipInput = Read-Host "Restrict Take Ownership to Administrators? (Y/N)"
-    $ctrlAltDelInput = Read-Host "Require CTRL+ALT+DEL for login? (Y/N)"
-
-    # Convert input strings to booleans: Y/y => $true, others => $false
-    $auditLogon = ($auditLogonInput.Trim().ToUpper() -eq 'Y')
-    $takeOwnership = ($takeOwnershipInput.Trim().ToUpper() -eq 'Y')
-    $ctrlAltDel = ($ctrlAltDelInput.Trim().ToUpper() -eq 'Y')
-
-    # Call the function with boolean values
-    Local-Policies -AuditLogonFailure:$auditLogon -TakeOwnershipRestricted:$takeOwnership -RequireCtrlAltDel:$ctrlAltDel
-
-    Pause
-
-
-        }
+        "5" { Local-Policies }
         "6" {defensive-Countermeasures }
         "7" {uncategorized-OS-Settings }
         "8" {service-Auditing }
@@ -1312,4 +1331,9 @@ function application-Security-Settings {
 #New functions and colors for malware section added 
 #Moved group auditing to its user auditing so if issues arise check that section
 # Also updated the defensive countermeasures section to include the new color variables and new functions so check there if issues arise
+#Document systems rewrote the installed locations function so check for text document
+#rewrote enable updates section 
+#Also added in the unwanted software section the ability to delete the everything folders found during the document system function
+# Have fun finding any needle in the haystack
+
 

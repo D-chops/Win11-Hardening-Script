@@ -370,7 +370,7 @@ function Local-Policies {
  
   #Option to Enable\Disable Take Ownership Privilege 
   $takeOwnership = Read-Host "Do yo want to enable Take Ownership Privilege? (Y/N) [Default: Y]" -ForegroundColor $ColorPrompt
-  if ($takeOwnership -match "^[Yy]$" -or $takeOwnership -eq "") 
+  if ($takeOwnership -match "^[Yy]$" -or $takeOwnership -eq "") { 
     Write-Host " Enabling Take Ownership Privilege..." -ForegroundColor $ColorHeader
     try {
         #Enable Take Ownership Privilege
@@ -380,7 +380,7 @@ function Local-Policies {
     } catch {
         Write-Host "Failed to enable Take Ownership Privilege: $_" -ForegroundColor $ColorWarning
     }
-    } elseif ($takeOwnership -match "^[Nn]$") 
+    } elseif ($takeOwnership -match "^[Nn]$")
         Write-Host "Disabling Take Ownership Privilege..." -ForegroundColor $ColorHeader
          try {
             #Disable Take Ownership Privilege
@@ -411,7 +411,7 @@ function Local-Policies {
             Write-Host "Failed to disable Ctrl+Alt+Del requirement: $_" -ForegroundColor $ColorWarning
         }
     }
-
+}
 
 function Defensive-Countermeasures {
     Write-Host "`n--- Starting: Defensive Countermeasures ---`n" -ForegroundColor $ColorHeader
@@ -917,7 +917,7 @@ function prohibited-Files {
                 $foundProhibitedFiles += $foundFiles
             }
         } catch {
-            Write-Host "Error accessing $path: $_" -ForegroundColor Red
+            Write-Host "Error accessing $path : $_" -ForegroundColor Red
         }
     }
 
@@ -943,7 +943,7 @@ function prohibited-Files {
             Remove-Item -Path $filePath -Force -ErrorAction Stop
             Write-Host "Deleted: $filePath" -ForegroundColor Green
         } catch {
-            Write-Host "Failed to delete $filePath: $_" -ForegroundColor Red
+            Write-Host "Failed to delete $filePath : $_" -ForegroundColor Red
         }
     }
 
@@ -973,7 +973,6 @@ function prohibited-Files {
     Write-Host "`n--- Prohibited Files Intake Complete ---`n"
 }
 
-}
 function unwanted-Software {
     Write-Host "`n--- Starting: Unwanted Software Scan ---`n"
 

@@ -1015,10 +1015,37 @@ function unwanted-Software {
     $choice = Read-Host "Type 'all' to uninstall everything listed, 'prompt' to uninstall one by one, or 'no' to cancel [all/prompt/no] (default: prompt)"
 
     function Uninstall-Software {
-    param (
+    param 
         [string]$DisplayName
+  function Schedule-FileDeletionOnReboot {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$FilePath
     )
-    # List of system-protected files you want to forcibly delete
+
+    $regPath = "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager"
+    $valueName = "PendingFileRenameOperations"
+
+    # Prepare the delete pair: file path and empty string
+    # This tells Windows to delete the file on next reboot
+    $deletePair = @($FilePath, "")
+
+    # Read existing PendingFileRenameOperations values if exist
+    $existing = (Get-ItemProperty -Path $regPath -Name $valueName -ErrorAction SilentlyContinue).$valueName
+
+    if ($existing) {
+        # Append to existing array
+        $newValue = $existing + $deletePair
+    } else {
+        $newValue = $deletePair
+    }
+
+    # Write updated PendingFileRenameOperations back to registry
+    Set-ItemProperty -Path $regPath -Name $valueName -Value $newValue -Type MultiString
+    Write-Host "Scheduled deletion of $FilePath on next reboot." -ForegroundColor Yellow
+}
+
+# Your list of files to delete
 $filesToDelete = @(
     "C:\Windows\System32\zh-TW\cdosys.dll.mui",
     "C:\Windows\System32\zh-TW\comctl32.dll.mui",
@@ -1039,25 +1066,30 @@ foreach ($file in $filesToDelete) {
         Write-Host "`nProcessing file: $file" -ForegroundColor Cyan
         
         try {
-            # Take ownership of the file
+            # Take ownership
             & takeown.exe /F $file /A /R /D Y | Out-Null
             
-            # Grant full control permissions to Administrators group
+            # Grant full control permissions
             & icacls.exe $file /grant Administrators:F /T /C | Out-Null
             
-            # Attempt to delete the file forcibly
+            # Attempt immediate deletion
             Remove-Item -Path $file -Force -ErrorAction Stop
             
-            Write-Host "Successfully deleted: $file" -ForegroundColor Green
+            Write-Host "Deleted file immediately: $file" -ForegroundColor Green
         }
         catch {
-            Write-Host "Failed to delete $file : $_" -ForegroundColor Red
+            Write-Host "Could not delete immediately: $file" -ForegroundColor Red
+            # Schedule deletion on reboot
+            Schedule-FileDeletionOnReboot -FilePath $file
         }
     }
     else {
-        Write-Host "File does not exist: $file" -ForegroundColor Yellow
+        Write-Host "File not found: $file" -ForegroundColor Yellow
     }
 }
+
+Write-Host "`nAll done! Please reboot the system to complete deletions." -ForegroundColor Magenta
+
 
     $installed = Get-InstalledSoftware | Where-Object { $_.DisplayName -eq $DisplayName }
 

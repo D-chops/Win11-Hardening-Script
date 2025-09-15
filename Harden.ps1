@@ -145,8 +145,9 @@ function Document-System {
 
 function Enable-Updates {
     Write-Host "`n--- Starting: Enable updates ---`n"
-    try{
-        # Ensures the windows updates service is running
+
+    try {
+        # Ensures the Windows Update service is running
         Write-Host "Starting Windows Update service..." -ForegroundColor $ColorHeader
         $updateService = Get-Service -Name "wuauserv"
         if ($updateService.Status -ne 'Running') {
@@ -155,27 +156,33 @@ function Enable-Updates {
         } else {
             Write-Host "Windows Update service is already running." -ForegroundColor $ColorKept
         }
-        # Set windows update to automatic (With Delayed Action)
-        Write-Host "Setting Windows Update service to Automatic (Delayed Start)..." -ForegroundColor $ColorHeader
+
+        # Set Windows Update to Automatic (Delayed Start)
+        Write-Host "Setting Windows Update service to Automatic..." -ForegroundColor $ColorHeader
         Set-Service -Name "wuauserv" -StartupType Automatic
         Write-Host "Windows Update service startup type set to Automatic." -ForegroundColor $ColorKept
 
-        #Set the registry to enable automatic updates
-        Set-ItemProperty -path $autoUpdatekey -Name "AUOptions" -Value 4 # 4 = Auto download and schedule the install
-
-        # Also Set the scheduled install day and time to ensure updates are applied
-        Set-ItemProperty -path $autoUpdatekey -Name "ScheduledInstallDay" -Value 0 # 0 = Every day
-        Set-ItemProperty -path $autoUpdatekey -Name "ScheduledInstallTime" -Value 3 # 3 = 3 AM
-        Write-host "Windows Updates are now enabled and set to automaticaly download and install updates" -Foregroundcolor $ColorKept
-
-        #Configure Auto Update settings
-        $updateConfig = Get-WmiObject -Class "Win32_OperatingSystem" | Select-Object -ExpandProperty "AutomaticManagedPagefile"
-        if ($updateConfig -ne "True") {
-            Write-Host "Configuring Automatic Updates to Enabled" -ForegroundColor $ColorHeader
-            Set-WmiInstance -Class "Win32_OperatingSystem" -Arguments @{AutomaticManagedPagefile="True"}
+        # Set registry keys for automatic updates
+        $autoUpdateKey = "HKLM:\Software\Policies\Microsoft\Windows\WindowsUpdate\AU"
+        if (-not (Test-Path $autoUpdateKey)) {
+            New-Item -Path $autoUpdateKey -Force | Out-Null
         }
+
+        Set-ItemProperty -Path $autoUpdateKey -Name "AUOptions" -Value 4              # Auto download and schedule install
+        Set-ItemProperty -Path $autoUpdateKey -Name "ScheduledInstallDay" -Value 0    # Every day
+        Set-ItemProperty -Path $autoUpdateKey -Name "ScheduledInstallTime" -Value 3   # 3 AM
+
+        Write-Host "Windows Updates are now enabled and set to automatically download and install updates." -ForegroundColor $ColorKept
+
+        # Configure automatic updates through WMI (if applicable)
+        $updateConfig = Get-WmiObject -Class "Win32_OperatingSystem" | Select-Object -ExpandProperty "AutomaticManagedPagefile"
+        if ($updateConfig -ne $true) {
+            Write-Host "Configuring Automatic Updates to Enabled..." -ForegroundColor $ColorHeader
+            Set-WmiInstance -Class "Win32_OperatingSystem" -Arguments @{AutomaticManagedPagefile = $true}
+        }
+
+        Write-Host "`n--- Enable updates Complete ---`n"
     }
-    Write-Host "`n--- Enable updates Complete ---`n"
     catch {
         Write-Host "Failed to enable updates: $_" -ForegroundColor $ColorWarning
     }
@@ -367,28 +374,33 @@ function Local-Policies {
         Write-Host "Failed to disable auditing for Logon Events: $_" -ForegroundColor $ColorWarning
     }
 }
- 
-  #Option to Enable\Disable Take Ownership Privilege 
-  $takeOwnership = Read-Host "Do yo want to enable Take Ownership Privilege? (Y/N) [Default: Y]" -ForegroundColor $ColorPrompt
-  if ($takeOwnership -match "^[Yy]$" -or $takeOwnership -eq "") { 
+ # Option to Enable\Disable Take Ownership Privilege 
+$takeOwnership = Read-Host "Do you want to enable Take Ownership Privilege? (Y/N) [Default: Y]" -ForegroundColor $ColorPrompt
+
+if ($takeOwnership -match "^[Yy]$" -or $takeOwnership -eq "") { 
     Write-Host " Enabling Take Ownership Privilege..." -ForegroundColor $ColorHeader
     try {
-        #Enable Take Ownership Privilege
+        # Enable Take Ownership Privilege
         $regPath = "HKLM:\Software\Microsoft\Windows NT\CurrentVersion\SeDenyInteractiveLogonRight"
-        Set-ItemProperty -Path $ regPath -Name "SeTakeOwnershipPrivilege" -Value 1
+        Set-ItemProperty -Path $regPath -Name "SeTakeOwnershipPrivilege" -Value 1
         Write-Host "Take Ownership Privilege enabled." -ForegroundColor $ColorKept
     } catch {
         Write-Host "Failed to enable Take Ownership Privilege: $_" -ForegroundColor $ColorWarning
     }
-    } elseif ($takeOwnership -match "^[Nn]$")
-        Write-Host "Disabling Take Ownership Privilege..." -ForegroundColor $ColorHeader
-         try {
-            #Disable Take Ownership Privilege
-            Remove-ItemProperty -Path $regPath -Name "SeTakeOwnershipPrivilege"
-            Write-Host "Take Ownership Privilege disabled." -ForegroundColor $ColorRemoved
-        } catch {
-            Write-Host "Failed to disable Take Ownership Privilege: $_" -ForegroundColor $ColorWarning
-        }
+
+} elseif ($takeOwnership -match "^[Nn]$") {
+    Write-Host "Disabling Take Ownership Privilege..." -ForegroundColor $ColorHeader
+    try {
+        # Disable Take Ownership Privilege
+        $regPath = "HKLM:\Software\Microsoft\Windows NT\CurrentVersion\SeDenyInteractiveLogonRight"
+        Remove-ItemProperty -Path $regPath -Name "SeTakeOwnershipPrivilege"
+        Write-Host "Take Ownership Privilege disabled." -ForegroundColor $ColorRemoved
+    } catch {
+        Write-Host "Failed to disable Take Ownership Privilege: $_" -ForegroundColor $ColorWarning
+    }
+} else {
+    Write-Host "Invalid input. Please enter Y or N." -ForegroundColor $ColorWarning
+}
      
     # Option to enable\disable ctrl+alt+del requirement for logon
     $ctrlAltDel = Read-Host "Would you like to enable Ctrl+Alt+Del requirement for logon? (Y/n) [Default: Y]" -ForegroundColor $ColorPrompt

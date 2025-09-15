@@ -1442,4 +1442,3 @@ function application-Security-Settings {
     }
 } while ($true)
 # errors with 5,2,12
-#default browser is launching before everythink no bueno

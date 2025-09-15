@@ -1156,17 +1156,6 @@ function application-Security-Settings {
         return
     }
 
-    # Apply the execution policy restriction for non-admin users
-    try {
-        # Set the execution policy to 'Restricted' for all users (non-admins will be affected by this)
-        Set-ExecutionPolicy -ExecutionPolicy Restricted -Scope LocalMachine -Force
-        Write-Host "Execution Policy set to Restricted for all non-admin users."
-    }
-    catch {
-        Write-Host "Failed to set execution policy: $_" -ForegroundColor Red
-    }
-}
-
     # Detect default browser from registry
     $defaultBrowser = $null
     try {
@@ -1422,6 +1411,17 @@ function application-Security-Settings {
         }
         Write-Host "`n--- Application Security Settings Complete ---`n"
     }
+     # Apply the execution policy restriction for non-admin users
+    try {
+        # Set the execution policy to 'Restricted' for all users (non-admins will be affected by this)
+        Set-ExecutionPolicy -ExecutionPolicy Restricted -Scope LocalMachine -Force
+        Write-Host "Execution Policy set to Restricted for all non-admin users."
+    }
+    catch {
+        Write-Host "Failed to set execution policy: $_" -ForegroundColor Red
+    }
+}
+
 
     
 
@@ -1453,16 +1453,5 @@ function application-Security-Settings {
         default { Write-Host "`nInvalid selection. Please try again." }
     }
 } while ($true)
-# IF ANY ISSUES CHECK THESE 
-# Option 5 added new functions if issues arise check the menu option 
-# New Additions to the App Security Settings function: trying to pull from document system function file for installed programs list 
-#New functions and colors for malware section added 
-#Moved group auditing to its user auditing so if issues arise check that section
-# Also updated the defensive countermeasures section to include the new color variables and new functions so check there if issues arise
-#Document systems rewrote the installed locations function so check for text document
-#rewrote enable updates section 
-#Also added in the unwanted software section the ability to delete the everything folders found during the document system function
-# Have fun finding any needle in the haystack
-# Added code into the prohibited files section to search for specific file names or patterns and delete them based on user input
-
-
+# errors with 5,2,12
+#default browser is launching before everythink no bueno

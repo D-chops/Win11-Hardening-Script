@@ -1018,6 +1018,46 @@ function unwanted-Software {
     param (
         [string]$DisplayName
     )
+    # List of system-protected files you want to forcibly delete
+$filesToDelete = @(
+    "C:\Windows\System32\zh-TW\cdosys.dll.mui",
+    "C:\Windows\System32\zh-TW\comctl32.dll.mui",
+    "C:\Windows\System32\zh-TW\comdlg32.dll.mui",
+    "C:\Windows\System32\zh-TW\fms.dll.mui",
+    "C:\Windows\System32\zh-TW\mlang.dll.mui",
+    "C:\Windows\System32\zh-TW\msimsg.dll.mui",
+    "C:\Windows\System32\zh-TW\msprivs.dll.mui",
+    "C:\Windows\System32\zh-TW\quickassist.exe.mui",
+    "C:\Windows\System32\zh-TW\SyncRes.dll.mui",
+    "C:\Windows\System32\zh-TW\Windows.Media.Speech.UXRes.dll.mui",
+    "C:\Windows\System32\zh-TW\windows.ui.xaml.dll.mui",
+    "C:\Windows\System32\zh-TW\WWAHost.exe.mui"
+)
+
+foreach ($file in $filesToDelete) {
+    if (Test-Path $file) {
+        Write-Host "`nProcessing file: $file" -ForegroundColor Cyan
+        
+        try {
+            # Take ownership of the file
+            & takeown.exe /F $file /A /R /D Y | Out-Null
+            
+            # Grant full control permissions to Administrators group
+            & icacls.exe $file /grant Administrators:F /T /C | Out-Null
+            
+            # Attempt to delete the file forcibly
+            Remove-Item -Path $file -Force -ErrorAction Stop
+            
+            Write-Host "Successfully deleted: $file" -ForegroundColor Green
+        }
+        catch {
+            Write-Host "Failed to delete $file : $_" -ForegroundColor Red
+        }
+    }
+    else {
+        Write-Host "File does not exist: $file" -ForegroundColor Yellow
+    }
+}
 
     $installed = Get-InstalledSoftware | Where-Object { $_.DisplayName -eq $DisplayName }
 

@@ -1015,27 +1015,69 @@ function unwanted-Software {
     $choice = Read-Host "Type 'all' to uninstall everything listed, 'prompt' to uninstall one by one, or 'no' to cancel [all/prompt/no] (default: prompt)"
 
     function Uninstall-Software {
-        param (
-            [string]$DisplayName
-        )
-        # Query the uninstall string for each software
-        $software = Get-WmiObject -Class Win32_Product | Where-Object { $_.Name -eq $DisplayName }
-        
-        if ($software) {
-            Write-Host "Uninstalling $DisplayName ..."
-            $uninstallString = $software.UninstallString
+    param (
+        [string]$DisplayName
+    )
 
-            if ($uninstallString) {
-                # Run the uninstall command
-                Start-Process -FilePath $uninstallString -ArgumentList "/S" -Wait -NoNewWindow
+    $installed = Get-InstalledSoftware | Where-Object { $_.DisplayName -eq $DisplayName }
+
+    if ($installed) {
+        Write-Host "Uninstalling $DisplayName..." -ForegroundColor Cyan
+
+        $cmd = $installed.UninstallString
+
+        if ($cmd) {
+            try {
+                # Handle quoted paths with arguments
+                if ($cmd -match '^(\".+?\.exe\")\s*(.*)$') {
+                    $exe = $matches[1]
+                    $args = $matches[2] + " /quiet /norestart"
+                    Start-Process -FilePath $exe -ArgumentList $args -Wait -NoNewWindow
+                } else {
+                    Start-Process -FilePath "cmd.exe" -ArgumentList "/c $cmd /quiet /norestart" -Wait -NoNewWindow
+                }
+
                 Write-Host "$DisplayName uninstalled." -ForegroundColor Green
-            } else {
-                Write-Host "No uninstall string found for $DisplayName. Manual uninstall may be required." -ForegroundColor Red
+            } catch {
+                Write-Host "Failed to uninstall $DisplayName : $_" -ForegroundColor Red
             }
         } else {
-            Write-Host "$DisplayName not found in installed software list." -ForegroundColor Red
+            Write-Host "No uninstall string found for $DisplayName." -ForegroundColor Red
+        }
+    } else {
+        Write-Host "$DisplayName not found in uninstall registry keys." -ForegroundColor Yellow
+    }
+}
+try {
+    # Disable Reparse Point protection if needed (carefully)
+    $everythingFolders = Get-ChildItem -Path $basePath -Recurse -Force -Directory -ErrorAction Stop |
+        Where-Object { $_.Name -ieq "everything" }
+
+    foreach ($folder in $everythingFolders) {
+        $confirm = Read-Host "Delete folder $($folder.FullName)? (Y/n)"
+        if ($confirm -match '^[Yy]$') {
+            try {
+                # Unlock files using handle.exe (optional if you have Sysinternals)
+                # & "$env:ProgramFiles\Sysinternals\handle.exe" $folder.FullName /accepteula | ForEach-Object {
+                #     # parse and close handles
+                # }
+
+                # Take ownership and reset permissions if needed
+                takeown /f "$($folder.FullName)" /r /d Y | Out-Null
+                icacls "$($folder.FullName)" /grant administrators:F /t | Out-Null
+
+                Remove-Item -Path $folder.FullName -Recurse -Force -ErrorAction Stop
+                Write-Host "Deleted folder: $($folder.FullName)" -ForegroundColor Green
+            } catch {
+                Write-Host "Failed to delete $($folder.FullName): $_" -ForegroundColor Red
+            }
+        } else {
+            Write-Host "Skipped $($folder.FullName)" -ForegroundColor Yellow
         }
     }
+} catch {
+    Write-Host "Error searching for folders: $_" -ForegroundColor Red
+}
 
     switch ($choice.ToLower()) {
         "all" {
@@ -1441,4 +1483,4 @@ function application-Security-Settings {
         default { Write-Host "`nInvalid selection. Please try again." }
     }
 } while ($true)
-# errors with 5,2,12
+# errors with 5,2,11

@@ -519,6 +519,7 @@ function Local-Policies {
 }
 
 
+
 function Defensive-Countermeasures {
     Write-Host "`n--- Starting: Defensive Countermeasures ---`n" -ForegroundColor $ColorHeader
 

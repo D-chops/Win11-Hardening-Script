@@ -187,8 +187,8 @@ function User-Auditing {
 
     $localUsers = Get-LocalUser
 
-    # Audit normal users (excluding built-in/system/current)
     foreach ($user in $localUsers) {
+        # Skip system/built-in/current accounts
         if (
             $user.Name -in @("Administrator", "Guest", "DefaultAccount", "WDAGUtilityAccount") -or
             $user.Name -eq $env:USERNAME
@@ -197,30 +197,38 @@ function User-Auditing {
             continue
         }
 
-        # Prompt authorization
+        # Prompt for authorization
         $response = Read-Host "Is '$($user.Name)' an Authorized User? (Y/n) [Default: Y]"
 
         if ($response -eq "" -or $response -match "^[Yy]$") {
             Write-Host "'$($user.Name)' marked as Authorized.`n"
 
-            # Check admin status
+            # Check if user is an admin
             $isAdmin = Get-LocalGroupMember -Group "Administrators" | Where-Object { $_.Name -eq $user.Name }
 
             if ($isAdmin) {
-                # User IS admin
+                # Offer to downgrade admin
                 $downgrade = Read-Host "'$($user.Name)' is an Administrator. Downgrade to standard user? (Y/n) [Default: n]"
                 if ($downgrade -match "^[Yy]$") {
                     try {
                         Remove-LocalGroupMember -Group "Administrators" -Member $user.Name -ErrorAction Stop
-                        Add-LocalGroupMember -Group "Users" -Member $user.Name -ErrorAction Stop
+
+                        # Check if user is already in Users group
+                        $inUsersGroup = Get-LocalGroupMember -Group "Users" | Where-Object { $_.Name -eq $user.Name }
+
+                        if (-not $inUsersGroup) {
+                            Add-LocalGroupMember -Group "Users" -Member $user.Name -ErrorAction Stop
+                        } else {
+                            Write-Host "'$($user.Name)' is already a member of the Users group."
+                        }
+
                         Write-Host "'$($user.Name)' downgraded to standard user." -ForegroundColor Green
                     } catch {
                         Write-Host "Failed to downgrade '$($user.Name)': $_" -ForegroundColor Yellow
                     }
                 }
             } else {
-                # User is NOT admin
-                Write-Host "'$($user.Name)' is NOT an administrator." -ForegroundColor Cyan
+                # Offer to upgrade to admin
                 $adminResponse = Read-Host "Should '$($user.Name)' be upgraded to Administrator? (Y/n) [Default: n]"
                 if ($adminResponse -match "^[Yy]$") {
                     try {
@@ -231,8 +239,8 @@ function User-Auditing {
                     }
                 }
             }
-        }
-        elseif ($response -match "^[Nn]$") {
+
+        } elseif ($response -match "^[Nn]$") {
             try {
                 Remove-LocalUser -Name $user.Name -ErrorAction Stop
                 Write-Host "'$($user.Name)' has been removed.`n"
@@ -244,39 +252,7 @@ function User-Auditing {
         }
     }
 
-    # Now audit Administrators explicitly (excluding built-in ones)
-    Write-Host "`n--- Auditing Administrators Group ---`n"
-    $admins = Get-LocalGroupMember -Group "Administrators" | Where-Object { $_.Name -notin @("Administrator", $env:USERNAME) }
-
-    foreach ($admin in $admins) {
-        $response = Read-Host "Is Administrator '$($admin.Name)' authorized? (Y/n) [Default: Y]"
-        if ($response -eq "" -or $response -match "^[Yy]$") {
-            Write-Host "'$($admin.Name)' is authorized."
-            # Optional: offer to downgrade here as well if desired
-            $downgrade = Read-Host "Downgrade '$($admin.Name)' to standard user? (Y/n) [Default: n]"
-            if ($downgrade -match "^[Yy]$") {
-                try {
-                    Remove-LocalGroupMember -Group "Administrators" -Member $admin.Name -ErrorAction Stop
-                    Add-LocalGroupMember -Group "Users" -Member $admin.Name -ErrorAction Stop
-                    Write-Host "'$($admin.Name)' downgraded to standard user." -ForegroundColor Green
-                } catch {
-                    Write-Host "Failed to downgrade '$($admin.Name)': $_" -ForegroundColor Yellow
-                }
-            }
-        }
-        elseif ($response -match "^[Nn]$") {
-            try {
-                Remove-LocalUser -Name $admin.Name -ErrorAction Stop
-                Write-Host "'$($admin.Name)' has been removed from the system."
-            } catch {
-                Write-Host "Failed to remove administrator '$($admin.Name)': $_" -ForegroundColor Yellow
-            }
-        } else {
-            Write-Host "Invalid input. Skipping administrator '$($admin.Name)'."
-        }
-    }
-
-    # Option to add new user remains unchanged
+    # Option to add a new user at the end
     $addUserResponse = Read-Host "Would you like to add a new local user? (Y/n) [Default: N]"
     if ($addUserResponse -match "^[Yy]$") {
         $newUserName = Read-Host "Enter the new username"
@@ -345,6 +321,7 @@ function User-Auditing {
 
     Write-Host "`n--- User and Admin Auditing Complete ---`n"
 }
+
 
 function Review-GroupMembers {
     param (

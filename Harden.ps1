@@ -1056,9 +1056,87 @@ function Prohibited-Files {
     Write-Host "`n--- Remove Prohibited Files Complete ---`n"
 }
 
-function unwanted-Software {
-    Write-Host "`n--- Starting: Unwanted Software Scan ---`n"
+function Unwanted-Software {
+    Write-Host "`n--- Starting: Unwanted Software Removal ---`n"
+
+    # List of unwanted software display names (partial match)
+    $unwantedSoftware = @(
+        "Angry IP Scanner",
+        "Everything"
+    )
+
+    foreach ($softwareName in $unwantedSoftware) {
+        try {
+            # Search installed software in 64-bit and 32-bit registry locations
+            $uninstallKeys = @(
+                "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
+                "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"
+            )
+
+            $found = $false
+
+            foreach ($keyPath in $uninstallKeys) {
+                $apps = Get-ChildItem -Path $keyPath -ErrorAction SilentlyContinue
+
+                foreach ($app in $apps) {
+                    $displayName = (Get-ItemProperty -Path $app.PSPath -Name DisplayName -ErrorAction SilentlyContinue).DisplayName
+
+                    if ($displayName -and $displayName -like "*$softwareName*") {
+                        $found = $true
+                        Write-Host "Found installed software: $displayName"
+
+                        $uninstallString = (Get-ItemProperty -Path $app.PSPath -Name UninstallString -ErrorAction SilentlyContinue).UninstallString
+
+                        if ($uninstallString) {
+                            Write-Host "Attempting to uninstall $displayName..."
+
+                            # Sometimes uninstall string contains parameters; handle accordingly
+                            $uninstallExe, $uninstallArgs = $null, $null
+
+                            if ($uninstallString -match '\"(.+?)\"(.*)') {
+                                $uninstallExe = $matches[1]
+                                $uninstallArgs = $matches[2].Trim()
+                            } else {
+                                $parts = $uninstallString.Split(" ", 2)
+                                $uninstallExe = $parts[0]
+                                $uninstallArgs = if ($parts.Length -gt 1) { $parts[1] } else { "" }
+                            }
+
+                            # Add silent uninstall parameters if common (may vary by software)
+                            if ($uninstallExe -like "*.msi") {
+                                $uninstallArgs = "/x `"$uninstallExe`" /quiet /norestart"
+                                $uninstallExe = "msiexec.exe"
+                            } else {
+                                # Add common silent flags for EXE uninstallers
+                                if (-not ($uninstallArgs -match "/quiet|/silent|/s")) {
+                                    $uninstallArgs += " /S /quiet /qn"
+                                }
+                            }
+
+                            try {
+                                Start-Process -FilePath $uninstallExe -ArgumentList $uninstallArgs -Wait -NoNewWindow
+                                Write-Host "$displayName uninstalled successfully." -ForegroundColor Green
+                            } catch {
+                                Write-Host "Failed to uninstall $displayName : $_" -ForegroundColor Red
+                            }
+                        } else {
+                            Write-Host "No uninstall string found for $displayName." -ForegroundColor Yellow
+                        }
+                    }
+                }
+            }
+
+            if (-not $found) {
+                Write-Host "$softwareName is not installed." -ForegroundColor Green
+            }
+        } catch {
+            Write-Host "An error occurred processing $softwareName : $_" -ForegroundColor Red
+        }
+    }
+
+    Write-Host "`n--- Unwanted Software Removal Complete ---`n"
 }
+
     
 
 

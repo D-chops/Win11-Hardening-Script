@@ -385,7 +385,8 @@ function Local-Policies {
     if ($auditLogon -match "^[Yy]$" -or $auditLogon -eq "") {
         Write-Host "Enabling auditing for Logon Events..." -ForegroundColor $ColorHeader
         try {
-            auditpol /set /subcategory:"Logon/Logoff" /success:enable /failure:enable
+            auditpol /set /subcategory:"Logon" /success:enable /failure:enable
+            auditpol /set /subcategory:"Logoff" /success:enable /failure:enable
             Write-Host "Auditing for Logon Events enabled." -ForegroundColor $ColorKept
         } catch {
             Write-Host "Failed to enable auditing for Logon Events: $_" -ForegroundColor $ColorWarning
@@ -393,7 +394,8 @@ function Local-Policies {
     } elseif ($auditLogon -match "^[Nn]$") {
         Write-Host "Disabling auditing for Logon Events..." -ForegroundColor $ColorHeader
         try {
-            auditpol /set /subcategory:"Logon/Logoff" /success:disable /failure:disable
+            auditpol /set /subcategory:"Logon" /success:disable /failure:disable
+            auditpol /set /subcategory:"Logoff" /success:disable /failure:disable
             Write-Host "Auditing for Logon Events disabled." -ForegroundColor $ColorRemoved
         } catch {
             Write-Host "Failed to disable auditing for Logon Events: $_" -ForegroundColor $ColorWarning
@@ -431,7 +433,7 @@ SeTakeOwnershipPrivilege =
         Write-Host "Skipped removal of 'Take Ownership' privilege." -ForegroundColor $ColorRemoved
     }
 
-    # Enable/disable Ctrl+Alt+Del requirement
+    # Enable/disable Ctrl+Alt+Del requirement for logon
     $ctrlAltDel = Read-Host "Would you like to enable Ctrl+Alt+Del requirement for logon? (Y/n) [Default: Y]" -ForegroundColor $ColorPrompt
     $systemPoliciesPath = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System"
 
@@ -453,7 +455,7 @@ SeTakeOwnershipPrivilege =
         }
     }
 
-    # Execution Policy Change — optional for admin or standard user
+    # Execution Policy change
     $currentUser = [Security.Principal.WindowsIdentity]::GetCurrent()
     $principal = New-Object Security.Principal.WindowsPrincipal($currentUser)
     $isAdmin = $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
@@ -465,7 +467,16 @@ SeTakeOwnershipPrivilege =
         if ($changePolicy -match "^[Yy]$") {
             try {
                 Set-ExecutionPolicy -ExecutionPolicy Restricted -Scope LocalMachine -Force
-                Write-Host "Execution policy set to 'Restricted' for all users." -ForegroundColor $ColorKept
+                $effectivePolicy = Get-ExecutionPolicy -Scope LocalMachine
+                $currentPolicy = Get-ExecutionPolicy
+
+                if ($effectivePolicy -ne $currentPolicy) {
+                    Write-Host "Execution policy was set, but is overridden by a more specific policy." -ForegroundColor $ColorWarning
+                    Write-Host "Effective policy: $currentPolicy"
+                    Write-Host "Run 'Get-ExecutionPolicy -List' for details." -ForegroundColor $ColorWarning
+                } else {
+                    Write-Host "Execution policy set to 'Restricted' for all users." -ForegroundColor $ColorKept
+                }
             } catch {
                 Write-Host "Failed to change execution policy: $_" -ForegroundColor $ColorWarning
             }
@@ -489,6 +500,7 @@ SeTakeOwnershipPrivilege =
 
     Write-Host "`n--- Local Policies Complete ---`n"
 }
+
 
 function Defensive-Countermeasures {
     Write-Host "`n--- Starting: Defensive Countermeasures ---`n" -ForegroundColor $ColorHeader

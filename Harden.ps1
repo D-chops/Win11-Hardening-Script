@@ -380,121 +380,138 @@ function Account-Policies {
 function Local-Policies {
     Write-Host "`n--- Starting: Local Policies ---`n"
 
-    # Enable/disable auditing for logon events
-    $auditLogon = Read-Host "Would you like to enable auditing for Logon Events? (Y/n) [Default: Y]" -ForegroundColor $ColorPrompt
+    # Helper function to remove 'Take Ownership' privilege
+    function Remove-TakeOwnershipPrivilege {
+        Write-Host "Removing 'Take Ownership' privilege from all users..."
+        $exportInf = "$env:TEMP\export.inf"
+        $modifiedInf = "$env:TEMP\modified.inf"
+        $seceditLog = "$env:TEMP\secedit.log"
+
+        try {
+            # Export current security policy
+            secedit /export /cfg $exportInf /quiet
+
+            # Read the exported INF content
+            $content = Get-Content $exportInf
+
+            # Clear the SeTakeOwnershipPrivilege line
+            $newContent = $content -replace 'SeTakeOwnershipPrivilege\s*=\s*.*', 'SeTakeOwnershipPrivilege ='
+
+            # Save the modified INF file with Unicode encoding
+            $newContent | Set-Content -Path $modifiedInf -Encoding Unicode
+
+            # Apply the modified security policy
+            secedit /configure /db secedit.sdb /cfg $modifiedInf /quiet /log $seceditLog
+
+            # Cleanup temporary files
+            Remove-Item $exportInf, $modifiedInf -Force -ErrorAction SilentlyContinue
+
+            Write-Host "'Take Ownership' privilege successfully removed from all users."
+            Write-Host "Note: A reboot or user logoff/logon may be required for the changes to take effect."
+        }
+        catch {
+            Write-Host "Error removing 'Take Ownership' privilege: $_" -ForegroundColor Red
+        }
+    }
+
+    # Auditing for Logon Events
+    $auditLogon = Read-Host "Enable auditing for Logon Events? (Y/n) [Default: Y]"
     if ($auditLogon -match "^[Yy]$" -or $auditLogon -eq "") {
-        Write-Host "Enabling auditing for Logon Events..." -ForegroundColor $ColorHeader
+        Write-Host "Enabling auditing for Logon and Logoff events..."
         try {
             auditpol /set /subcategory:"Logon" /success:enable /failure:enable
             auditpol /set /subcategory:"Logoff" /success:enable /failure:enable
-            Write-Host "Auditing for Logon Events enabled." -ForegroundColor $ColorKept
+            Write-Host "Auditing for Logon events enabled."
         } catch {
-            Write-Host "Failed to enable auditing for Logon Events: $_" -ForegroundColor $ColorWarning
+            Write-Host "Failed to enable auditing for Logon events: $_" -ForegroundColor Yellow
         }
-    } elseif ($auditLogon -match "^[Nn]$") {
-        Write-Host "Disabling auditing for Logon Events..." -ForegroundColor $ColorHeader
+    }
+    elseif ($auditLogon -match "^[Nn]$") {
+        Write-Host "Disabling auditing for Logon and Logoff events..."
         try {
             auditpol /set /subcategory:"Logon" /success:disable /failure:disable
             auditpol /set /subcategory:"Logoff" /success:disable /failure:disable
-            Write-Host "Auditing for Logon Events disabled." -ForegroundColor $ColorRemoved
+            Write-Host "Auditing for Logon events disabled."
         } catch {
-            Write-Host "Failed to disable auditing for Logon Events: $_" -ForegroundColor $ColorWarning
-        }
-    }
-
-    # Remove "Take Ownership" privilege from all users
-    $removeOwnership = Read-Host "Do you want to remove the 'Take Ownership' right from all users? (Y/n) [Default: Y]" -ForegroundColor $ColorPrompt
-    if ($removeOwnership -match "^[Yy]$" -or $removeOwnership -eq "") {
-        Write-Host "Removing 'Take Ownership' privilege from all users..." -ForegroundColor $ColorHeader
-        try {
-            $infPath = "$env:TEMP\remove_take_ownership.inf"
-            $logPath = "$env:TEMP\secedit_takeownership_log.txt"
-
-            $infContent = @"
-[Unicode]
-Unicode=yes
-[Version]
-signature="\$CHICAGO\$"
-Revision=1
-[Privilege Rights]
-SeTakeOwnershipPrivilege =
-"@
-
-            $infContent | Out-File -Encoding ASCII -FilePath $infPath -Force
-
-            secedit /configure /db "$env:windir\security\database\takeownership.sdb" /cfg $infPath /log $logPath /quiet
-
-            Write-Host "'Take Ownership' privilege removed from all users." -ForegroundColor $ColorRemoved
-
-            # Clean up temp files
-            Remove-Item $infPath -Force -ErrorAction SilentlyContinue
-            Remove-Item $logPath -Force -ErrorAction SilentlyContinue
-        } catch {
-            Write-Host "Failed to remove 'Take Ownership' privilege: $_" -ForegroundColor $ColorWarning
+            Write-Host "Failed to disable auditing for Logon events: $_" -ForegroundColor Yellow
         }
     } else {
-        Write-Host "Skipped removal of 'Take Ownership' privilege." -ForegroundColor $ColorRemoved
+        Write-Host "Skipping auditing changes for Logon events."
     }
 
-    # Enable/disable Ctrl+Alt+Del requirement for logon
-    $ctrlAltDel = Read-Host "Would you like to enable Ctrl+Alt+Del requirement for logon? (Y/n) [Default: Y]" -ForegroundColor $ColorPrompt
+    # Remove 'Take Ownership' privilege
+    $removeOwnership = Read-Host "Remove the 'Take Ownership' privilege from all users? (Y/n) [Default: Y]"
+    if ($removeOwnership -match "^[Yy]$" -or $removeOwnership -eq "") {
+        Remove-TakeOwnershipPrivilege
+    } else {
+        Write-Host "Skipped removal of 'Take Ownership' privilege."
+    }
+
+    # Enable/Disable Ctrl+Alt+Del requirement for logon
+    $ctrlAltDel = Read-Host "Enable Ctrl+Alt+Del requirement for logon? (Y/n) [Default: Y]"
     $systemPoliciesPath = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System"
+    if (-not (Test-Path $systemPoliciesPath)) {
+        New-Item -Path $systemPoliciesPath -Force | Out-Null
+    }
 
     if ($ctrlAltDel -match "^[Yy]$" -or $ctrlAltDel -eq "") {
-        Write-Host "Enabling Ctrl+Alt+Del requirement for logon..." -ForegroundColor $ColorHeader
+        Write-Host "Enabling Ctrl+Alt+Del requirement for logon..."
         try {
             Set-ItemProperty -Path $systemPoliciesPath -Name "DisableCAD" -Value 0
-            Write-Host "Ctrl+Alt+Del requirement for logon enabled." -ForegroundColor $ColorKept
+            Write-Host "Ctrl+Alt+Del requirement enabled."
         } catch {
-            Write-Host "Failed to enable Ctrl+Alt+Del requirement: $_" -ForegroundColor $ColorWarning
-        }
-    } elseif ($ctrlAltDel -match "^[Nn]$") {
-        Write-Host "Disabling Ctrl+Alt+Del requirement for logon..." -ForegroundColor $ColorHeader
-        try {
-            Set-ItemProperty -Path $systemPoliciesPath -Name "DisableCAD" -Value 1
-            Write-Host "Ctrl+Alt+Del requirement for logon disabled." -ForegroundColor $ColorRemoved
-        } catch {
-            Write-Host "Failed to disable Ctrl+Alt+Del requirement: $_" -ForegroundColor $ColorWarning
+            Write-Host "Failed to enable Ctrl+Alt+Del requirement: $_" -ForegroundColor Yellow
         }
     }
+    elseif ($ctrlAltDel -match "^[Nn]$") {
+        Write-Host "Disabling Ctrl+Alt+Del requirement for logon..."
+        try {
+            Set-ItemProperty -Path $systemPoliciesPath -Name "DisableCAD" -Value 1
+            Write-Host "Ctrl+Alt+Del requirement disabled."
+        } catch {
+            Write-Host "Failed to disable Ctrl+Alt+Del requirement: $_" -ForegroundColor Yellow
+        }
+    } else {
+        Write-Host "Skipping Ctrl+Alt+Del requirement changes."
+    }
 
-    # Execution Policy Handling
+    # PowerShell Execution Policy Handling
     $currentUser = [Security.Principal.WindowsIdentity]::GetCurrent()
     $principal = New-Object Security.Principal.WindowsPrincipal($currentUser)
     $isAdmin = $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 
     if ($isAdmin) {
-        Write-Host "Current user is an administrator." -ForegroundColor $ColorHeader
-        $changePolicy = Read-Host "Do you want to change PowerShell execution policy for ALL users? (Y/n) [Default: N]"
+        Write-Host "Current user is an administrator."
+        $changePolicy = Read-Host "Change PowerShell execution policy for ALL users? (Y/n) [Default: N]"
         if ($changePolicy -match "^[Yy]$") {
             try {
                 Set-ExecutionPolicy -ExecutionPolicy Restricted -Scope LocalMachine -Force
                 $effectivePolicy = Get-ExecutionPolicy -Scope LocalMachine
                 $currentPolicy = Get-ExecutionPolicy
                 if ($effectivePolicy -ne $currentPolicy) {
-                    Write-Host "Execution policy was set, but is overridden by another scope." -ForegroundColor $ColorWarning
+                    Write-Host "Execution policy set but overridden by another scope."
                     Write-Host "Effective policy: $currentPolicy"
-                    Write-Host "Run 'Get-ExecutionPolicy -List' to check policy precedence." -ForegroundColor $ColorWarning
+                    Write-Host "Run 'Get-ExecutionPolicy -List' to check policy precedence."
                 } else {
-                    Write-Host "Execution policy set to 'Restricted' for all users." -ForegroundColor $ColorKept
+                    Write-Host "Execution policy set to 'Restricted' for all users."
                 }
             } catch {
-                Write-Host "Failed to change execution policy: $_" -ForegroundColor $ColorWarning
+                Write-Host "Failed to change execution policy: $_" -ForegroundColor Yellow
             }
         } else {
-            Write-Host "Skipping execution policy change." -ForegroundColor $ColorRemoved
+            Write-Host "Skipping execution policy change for all users."
         }
     } else {
-        $changePolicy = Read-Host "Do you want to change your own execution policy? (Y/n) [Default: N]"
+        $changePolicy = Read-Host "Change your own PowerShell execution policy? (Y/n) [Default: N]"
         if ($changePolicy -match "^[Yy]$") {
             try {
                 Set-ExecutionPolicy -ExecutionPolicy Restricted -Scope CurrentUser -Force
-                Write-Host "Execution policy set to 'Restricted' for current user." -ForegroundColor $ColorKept
+                Write-Host "Execution policy set to 'Restricted' for current user."
             } catch {
-                Write-Host "Failed to change execution policy: $_" -ForegroundColor $ColorWarning
+                Write-Host "Failed to change execution policy: $_" -ForegroundColor Yellow
             }
         } else {
-            Write-Host "Skipping execution policy change for current user." -ForegroundColor $ColorRemoved
+            Write-Host "Skipping execution policy change for current user."
         }
     }
 

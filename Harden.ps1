@@ -504,6 +504,78 @@ SeTakeOwnershipPrivilege =
 
 function Defensive-Countermeasures {
     Write-Host "`n--- Starting: Defensive Countermeasures ---`n" -ForegroundColor $ColorHeader
+    # Check Tamper Protection status
+function Get-TamperProtectionStatus {
+    $tamperRegPath = "HKLM:\SOFTWARE\Microsoft\Windows Defender\Features"
+    $tamperValueName = "TamperProtection"
+    try {
+        $tamperStatus = Get-ItemPropertyValue -Path $tamperRegPath -Name $tamperValueName -ErrorAction Stop
+        if ($tamperStatus -eq 5) {
+            return $true
+        } else {
+            return $false
+        }
+    } catch {
+        Write-Host "Could not read Tamper Protection registry key. Assuming disabled." -ForegroundColor Yellow
+        return $false
+    }
+}
+
+# Check Real-Time Protection group policy setting
+function Get-RealTimeProtectionPolicyStatus {
+    $rtpRegPath = "HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender\Real-Time Protection"
+    $rtpValueName = "DisableRealtimeMonitoring"
+    try {
+        $rtpStatus = Get-ItemPropertyValue -Path $rtpRegPath -Name $rtpValueName -ErrorAction Stop
+        if ($rtpStatus -eq 1) {
+            return $false  # Real-Time Protection disabled by policy
+        } else {
+            return $true   # Enabled or not configured
+        }
+    } catch {
+        # Key doesn't exist = policy not set, so RT protection enabled by default
+        return $true
+    }
+}
+
+# Check current Defender status
+function Get-DefenderStatus {
+    try {
+        $status = Get-MpComputerStatus
+        return $status.RealTimeProtectionEnabled
+    } catch {
+        Write-Host "Could not retrieve Defender status." -ForegroundColor Yellow
+        return $null
+    }
+}
+
+# Main check
+$tamperEnabled = Get-TamperProtectionStatus
+$policyAllowsRTP = Get-RealTimeProtectionPolicyStatus
+$currentRTP = Get-DefenderStatus
+
+Write-Host "`n=== Microsoft Defender Real-Time Protection Status Check ===`n"
+
+Write-Host "Tamper Protection Enabled: $tamperEnabled"
+Write-Host "Group Policy Allows Real-Time Protection: $policyAllowsRTP"
+Write-Host "Current Real-Time Protection Status: $currentRTP"
+
+if ($tamperEnabled) {
+    Write-Host "`nWarning: Tamper Protection is enabled and may block changes to Real-Time Protection settings." -ForegroundColor Yellow
+}
+
+if (-not $policyAllowsRTP) {
+    Write-Host "`nWarning: Group Policy disables Real-Time Protection." -ForegroundColor Yellow
+}
+
+if (-not $currentRTP) {
+    Write-Host "`nReal-Time Protection is currently disabled." -ForegroundColor Red
+} else {
+    Write-Host "`nReal-Time Protection is currently enabled." -ForegroundColor Green
+}
+
+Write-Host "`nTo enable Real-Time Protection via script, Tamper Protection and/or Group Policy settings must first allow it."
+
 
     try {
         # Enable Real-Time Protection

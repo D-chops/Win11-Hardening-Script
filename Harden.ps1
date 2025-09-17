@@ -604,6 +604,7 @@ function Defensive-Countermeasures {
 }
 
 
+
 function Uncategorized-OS-Settings {
     Write-Host "`n--- Starting: Uncategorized OS Settings ---`n"
 

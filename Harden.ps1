@@ -1056,7 +1056,7 @@ function Prohibited-Files {
     Write-Host "`n--- Remove Prohibited Files Complete ---`n"
 }
 
-function UnwantedSoftware {
+function Unwanted-Software {
     Write-Host "`n--- Starting: Unwanted Software Removal ---`n"
 
     # List of unwanted executable filenames (you can add more patterns here)

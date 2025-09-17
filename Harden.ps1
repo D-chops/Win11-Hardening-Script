@@ -1025,7 +1025,7 @@ function application-Updates {
 
 
 
-function ProhibitedFiles {
+function Prohibited-Files {
     param (
         [string]$SearchPath = "C:\",   # Default search root
         [string]$FileName = "users.txt"

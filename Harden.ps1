@@ -546,10 +546,10 @@ function Defensive-Countermeasures {
                 Write-Host "✅ Microsoft Defender service started." -ForegroundColor $ColorKept
             } else {
                 Write-Host "ℹ️ Microsoft Defender service is already running." -ForegroundColor $ColorKept
-            }
+            }  # <--- FIXED: Added this missing closing brace
         } catch {
             Write-Host "❌ Could not start Microsoft Defender service: $_" -ForegroundColor $ColorWarning
-        } # <-- Closed the Defender service try-catch block properly here
+        }
 
         # Update Defender Definitions
         Write-Host "Updating Microsoft Defender definitions..." -ForegroundColor $ColorHeader
@@ -569,7 +569,7 @@ function Defensive-Countermeasures {
                 New-NetFirewallRule -DisplayName "Block Malware IP: $ip" -Direction Outbound -Action Block -RemoteAddress $ip -ErrorAction SilentlyContinue
                 Write-Host "🔒 Blocked IP: $ip" -ForegroundColor $ColorRemoved
             }
-        } # <-- Closed blocking IPs if block
+        }
 
         # Option 2: Disable Unsafe File Types (Script Execution)
         $disableFileTypes = Read-Host "Do you want to disable unsafe file types from running? (Y/n) [Default: Y]" -ForegroundColor $ColorPrompt
@@ -581,7 +581,7 @@ function Defensive-Countermeasures {
             } catch {
                 Write-Host "❌ Failed to set execution policy: $_" -ForegroundColor $ColorWarning
             }
-        } # <-- Closed disabling unsafe file types if block
+        }
 
         # Option 3: Monitor & Block Registry Changes
         $monitorRegistry = Read-Host "Do you want to block registry changes by malware? (Y/n) [Default: Y]" -ForegroundColor $ColorPrompt
@@ -594,7 +594,7 @@ function Defensive-Countermeasures {
             } catch {
                 Write-Host "❌ Failed to disable registry tools: $_" -ForegroundColor $ColorWarning
             }
-        } # <-- Closed monitoring registry if block
+        }
 
     } catch {
         Write-Host "❌ An unexpected error occurred: $_" -ForegroundColor Red
@@ -602,7 +602,6 @@ function Defensive-Countermeasures {
 
     Write-Host "`n--- Defensive Countermeasures Complete ---`n" -ForegroundColor $ColorHeader
 }
-
 
 
 

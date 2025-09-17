@@ -157,7 +157,7 @@ function Enable-Updates {
             Write-Host "Windows Update service is already running." -ForegroundColor $ColorKept
         }
 
-        # Set Windows Update to Automatic (Delayed Start)
+        # Set Windows Update to Automatic
         Write-Host "Setting Windows Update service to Automatic..." -ForegroundColor $ColorHeader
         Set-Service -Name "wuauserv" -StartupType Automatic
         Write-Host "Windows Update service startup type set to Automatic." -ForegroundColor $ColorKept
@@ -174,19 +174,13 @@ function Enable-Updates {
 
         Write-Host "Windows Updates are now enabled and set to automatically download and install updates." -ForegroundColor $ColorKept
 
-        # Configure automatic updates through WMI (if applicable)
-        $updateConfig = Get-WmiObject -Class "Win32_OperatingSystem" | Select-Object -ExpandProperty "AutomaticManagedPagefile"
-        if ($updateConfig -ne $true) {
-            Write-Host "Configuring Automatic Updates to Enabled..." -ForegroundColor $ColorHeader
-            Set-WmiInstance -Class "Win32_OperatingSystem" -Arguments @{AutomaticManagedPagefile = $true}
-        }
-
         Write-Host "`n--- Enable updates Complete ---`n"
     }
     catch {
         Write-Host "Failed to enable updates: $_" -ForegroundColor $ColorWarning
     }
 }
+
 
 function User-Auditing {
     Write-Host "`n--- Starting: User and Admin Auditing ---`n"
@@ -208,16 +202,35 @@ function User-Auditing {
 
         if ($response -eq "" -or $response -match "^[Yy]$") {
             Write-Host "'$($user.Name)' marked as Authorized.`n"
-            # Ask if user should be upgraded to admin
-            $adminResponse = Read-Host "Should '$($user.Name)' be upgraded to Administrator? (Y/n) [Default: n]"
-            if ($adminResponse -match "^[Yy]$") {
-                try {
-                    Add-LocalGroupMember -Group "Administrators" -Member $user.Name -ErrorAction Stop
-                    Write-Host "'$($user.Name)' added to Administrators group." -ForegroundColor $ColorKept
-                } catch {
-                    Write-Host "Failed to add '$($user.Name)' to Administrators: $_" -ForegroundColor $ColorWarning
+
+            # Check if user is an admin
+            $isAdmin = Get-LocalGroupMember -Group "Administrators" | Where-Object { $_.Name -eq $user.Name }
+
+            if ($isAdmin) {
+                # Offer to downgrade admin
+                $downgrade = Read-Host "'$($user.Name)' is an Administrator. Downgrade to standard user? (Y/n) [Default: n]"
+                if ($downgrade -match "^[Yy]$") {
+                    try {
+                        Remove-LocalGroupMember -Group "Administrators" -Member $user.Name -ErrorAction Stop
+                        Add-LocalGroupMember -Group "Users" -Member $user.Name -ErrorAction Stop
+                        Write-Host "'$($user.Name)' downgraded to standard user." -ForegroundColor $ColorKept
+                    } catch {
+                        Write-Host "Failed to downgrade '$($user.Name)': $_" -ForegroundColor $ColorWarning
+                    }
+                }
+            } else {
+                # Offer to upgrade to admin
+                $adminResponse = Read-Host "Should '$($user.Name)' be upgraded to Administrator? (Y/n) [Default: n]"
+                if ($adminResponse -match "^[Yy]$") {
+                    try {
+                        Add-LocalGroupMember -Group "Administrators" -Member $user.Name -ErrorAction Stop
+                        Write-Host "'$($user.Name)' added to Administrators group." -ForegroundColor $ColorKept
+                    } catch {
+                        Write-Host "Failed to add '$($user.Name)' to Administrators: $_" -ForegroundColor $ColorWarning
+                    }
                 }
             }
+
         } elseif ($response -match "^[Nn]$") {
             try {
                 Remove-LocalUser -Name $user.Name -ErrorAction Stop
@@ -240,6 +253,7 @@ function User-Auditing {
             Set-LocalUser -Name $newUserName -UserMayChangePassword $true
             Set-LocalUser -Name $newUserName -PasswordNeverExpires $false
             Write-Host "User '$newUserName' created successfully."
+
             $newAdminResponse = Read-Host "Should '$newUserName' be upgraded to Administrator? (Y/n) [Default: n]"
             if ($newAdminResponse -match "^[Yy]$") {
                 try {
@@ -253,44 +267,9 @@ function User-Auditing {
             Write-Host "Failed to create user '$newUserName': $_"
         }
     }
-function Review-GroupMembers {
-    param (
-        [Parameter(Mandatory=$true)]
-        [string]$GroupName
-    )
 
-    Write-Host "`n=== Auditing group: $GroupName ===" -ForegroundColor $ColorHeader
-
-    try {
-        $members = Get-LocalGroupMember -Group $GroupName -ErrorAction Stop
-    } catch {
-        Write-Host "Group '$GroupName' not found or error occurred." -ForegroundColor $ColorWarning
-        return
-    }
-
-    foreach ($member in $members) {
-        Write-Host "Is " -NoNewline
-        Write-Host "$($member.Name)" -ForegroundColor $ColorName -NoNewline
-        Write-Host " authorized to be in " -NoNewline
-        Write-Host "$GroupName" -ForegroundColor $ColorName -NoNewline
-        Write-Host "? [Y/n] (default Y) " -ForegroundColor $ColorPrompt -NoNewline
-        $response = Read-Host
-
-        if ($response -match '^[Nn]') {
-            try {
-                Remove-LocalGroupMember -Group $GroupName -Member $member.Name -ErrorAction Stop
-                Write-Host "'$($member.Name)' removed from '$GroupName'." -ForegroundColor $ColorRemoved
-            } catch {
-                Write-Host "Failed to remove '$($member.Name)': $_" -ForegroundColor $ColorWarning
-            }
-        } else {
-            Write-Host "'$($member.Name)' kept in '$GroupName'." -ForegroundColor $ColorKept
-        }
-    }
-    Write-Host "`nReview complete for group: $GroupName" -ForegroundColor $ColorHeader
-}
-
-    # Set password for all users to $TempPassword and require change at next logon
+    # Set temporary password for all users
+    $TempPassword = "TempP@ssw0rd!"  # Replace with your desired temp password
     foreach ($user in $localUsers) {
         try {
             Set-LocalUser -Name $user.Name -Password (ConvertTo-SecureString $TempPassword -AsPlainText -Force)
@@ -320,7 +299,7 @@ function Review-GroupMembers {
         Write-Host "Failed to disable or rename Administrator account: $_"
     }
 
-    # Enforce password expiration and allow password change for all users
+    # Enforce password expiration and allow password change
     $localUsers = Get-LocalUser
     foreach ($user in $localUsers) {
         try {
@@ -330,9 +309,57 @@ function Review-GroupMembers {
             Write-Host "Failed to update '$($user.Name)': $_"
         }
     }
-    Write-Host "All users set: Password expires, user may change password."
+
     Write-Host "`n--- User and Admin Auditing Complete ---`n"
 }
+
+function Review-GroupMembers {
+    param (
+        [Parameter(Mandatory = $true)]
+        [string]$GroupName
+    )
+
+    Write-Host "`n=== Auditing group: $GroupName ===" -ForegroundColor $ColorHeader
+
+    try {
+        $members = Get-LocalGroupMember -Group $GroupName -ErrorAction Stop
+    } catch {
+        Write-Host "Group '$GroupName' not found or error occurred." -ForegroundColor $ColorWarning
+        return
+    }
+
+    foreach ($member in $members) {
+        Write-Host "Is " -NoNewline
+        Write-Host "$($member.Name)" -ForegroundColor $ColorName -NoNewline
+        Write-Host " authorized to be in " -NoNewline
+        Write-Host "$GroupName" -ForegroundColor $ColorName -NoNewline
+        Write-Host "? [Y/n] (default Y) " -ForegroundColor $ColorPrompt -NoNewline
+        $response = Read-Host
+
+        if ($response -match '^[Nn]') {
+            try {
+                Remove-LocalGroupMember -Group $GroupName -Member $member.Name -ErrorAction Stop
+                Write-Host "'$($member.Name)' removed from '$GroupName'." -ForegroundColor $ColorRemoved
+
+                # Prompt to downgrade to standard user
+                $downgrade = Read-Host "Do you want to add '$($member.Name)' to the 'Users' group? (Y/n) [Default: Y]"
+                if ($downgrade -eq "" -or $downgrade -match "^[Yy]$") {
+                    Add-LocalGroupMember -Group "Users" -Member $member.Name -ErrorAction Stop
+                    Write-Host "'$($member.Name)' added to 'Users' group." -ForegroundColor $ColorKept
+                } else {
+                    Write-Host "'$($member.Name)' was not added to 'Users' group." -ForegroundColor $ColorWarning
+                }
+            } catch {
+                Write-Host "Failed to modify group membership for '$($member.Name)': $_" -ForegroundColor $ColorWarning
+            }
+        } else {
+            Write-Host "'$($member.Name)' kept in '$GroupName'." -ForegroundColor $ColorKept
+        }
+    }
+
+    Write-Host "`nReview complete for group: $GroupName" -ForegroundColor $ColorHeader
+}
+
 function Account-Policies {
     Write-Host "`n--- Starting: Account-Policies ---`n"
     Write-Host "Setting maximum password age to $MaxPasswordAge days..."
@@ -422,6 +449,15 @@ if ($takeOwnership -match "^[Yy]$" -or $takeOwnership -eq "") {
         } catch {
             Write-Host "Failed to disable Ctrl+Alt+Del requirement: $_" -ForegroundColor $ColorWarning
         }
+        # Check if the current user is an administrator
+    $currentUser = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $adminRole = [Security.Principal.WindowsBuiltInRole]::Administrator
+    $isAdmin = $currentUser.Groups -contains (New-Object Security.Principal.NTAccount("BUILTIN", "Administrators")).Translate([Security.Principal.SecurityIdentifier]).Value
+
+    if ($isAdmin) {
+        Write-Host "Current user is an administrator. Skipping execution policy change."
+        return
+    }
     }
 }
 
@@ -1260,15 +1296,7 @@ function Malware {
 function application-Security-Settings {
     Write-Host "`n--- Starting: Application Security Settings ---`n"
 
-    # Check if the current user is an administrator
-    $currentUser = [Security.Principal.WindowsIdentity]::GetCurrent()
-    $adminRole = [Security.Principal.WindowsBuiltInRole]::Administrator
-    $isAdmin = $currentUser.Groups -contains (New-Object Security.Principal.NTAccount("BUILTIN", "Administrators")).Translate([Security.Principal.SecurityIdentifier]).Value
 
-    if ($isAdmin) {
-        Write-Host "Current user is an administrator. Skipping execution policy change."
-        return
-    }
 
     # Detect default browser from registry
     $defaultBrowser = $null
@@ -1557,4 +1585,5 @@ function application-Security-Settings {
         default { Write-Host "`nInvalid selection. Please try again." }
     }
 } while ($true)
-# errors with 5,2,11
+# errors with 5,2,11,12
+#Changes to 2,3 

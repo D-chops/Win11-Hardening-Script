@@ -400,16 +400,35 @@ function Local-Policies {
         }
     }
 
-    # Take Ownership Privilege (informational only, no reliable registry method)
-    $takeOwnership = Read-Host "Do you want to enable Take Ownership Privilege? (Y/N) [Default: Y]" -ForegroundColor $ColorPrompt
-    if ($takeOwnership -match "^[Yy]$" -or $takeOwnership -eq "") {
-        Write-Host "Enabling Take Ownership Privilege..." -ForegroundColor $ColorHeader
-        Write-Host "⚠️ Note: This requires manual configuration via secpol.msc or external tools (e.g. ntrights.exe)" -ForegroundColor Yellow
-    } elseif ($takeOwnership -match "^[Nn]$") {
-        Write-Host "Disabling Take Ownership Privilege..." -ForegroundColor $ColorHeader
-        Write-Host "⚠️ Note: This must be removed manually via Local Security Policy > User Rights Assignment" -ForegroundColor Yellow
+    # Remove "Take Ownership" privilege from all users
+    $removeOwnership = Read-Host "Do you want to remove the 'Take Ownership' right from all users? (Y/n) [Default: Y]" -ForegroundColor $ColorPrompt
+    if ($removeOwnership -match "^[Yy]$" -or $removeOwnership -eq "") {
+        Write-Host "Removing 'Take Ownership' privilege from all users..." -ForegroundColor $ColorHeader
+        try {
+            $infPath = "$env:TEMP\remove_take_ownership.inf"
+            $logPath = "$env:TEMP\secedit_log.txt"
+
+            $infContent = @"
+[Unicode]
+Unicode=yes
+[Version]
+signature="\$CHICAGO\$"
+Revision=1
+[Privilege Rights]
+SeTakeOwnershipPrivilege =
+"@
+
+            $infContent | Out-File -Encoding ASCII -FilePath $infPath -Force
+
+            secedit /configure /db "$env:SystemRoot\security\Database\takeownership.sdb" /cfg $infPath /log $logPath /quiet
+
+            Write-Host "'Take Ownership' privilege removed from all users." -ForegroundColor $ColorRemoved
+            Remove-Item $infPath -Force -ErrorAction SilentlyContinue
+        } catch {
+            Write-Host "Failed to remove 'Take Ownership' privilege: $_" -ForegroundColor $ColorWarning
+        }
     } else {
-        Write-Host "Invalid input. Please enter Y or N." -ForegroundColor $ColorWarning
+        Write-Host "Skipped removal of 'Take Ownership' privilege." -ForegroundColor $ColorRemoved
     }
 
     # Enable/disable Ctrl+Alt+Del requirement
@@ -1369,4 +1388,4 @@ function application-Security-Settings {
     }
 } while ($true)
 # errors with 5,2,11,12
-#3 needs to downgrade dan
+#3 needs to downgrade scream

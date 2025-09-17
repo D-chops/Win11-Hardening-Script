@@ -1025,100 +1025,35 @@ function application-Updates {
 
 
 
-function prohibited-Files {
-    Write-Host "`n--- Starting: Prohibited Files ---`n"
-    
-    # List of prohibited file patterns or specific file names (add more as needed)
-    $prohibitedFilesList = @(
-        "malware.exe",
-        "piratedSoftware*.exe",
-        "illegalFile*.zip",
-        "unwantedTool*.dll"
-        # Add other patterns or file names here as needed
+function ProhibitedFiles {
+    param (
+        [string]$SearchPath = "C:\",   # Default search root
+        [string]$FileName = "users.txt"
     )
 
-    # Define the base path to search for prohibited files (you can adjust this)
-    $baseSearchPaths = @(
-        "C:\Users",
-        "C:\Program Files",
-        "C:\Windows\System32"
-    )
+    Write-Host "`n--- Starting: Remove Prohibited Files ---`n"
 
-    # Initialize an array to store found prohibited files
-    $foundProhibitedFiles = @()
+    try {
+        # Find all instances of the prohibited file
+        $files = Get-ChildItem -Path $SearchPath -Filter $FileName -Recurse -ErrorAction SilentlyContinue
 
-    # Loop through each base search path
-    foreach ($path in $baseSearchPaths) {
-        Write-Host "Searching in: $path" -ForegroundColor Cyan
-        try {
-            # Search for prohibited files based on patterns in the list
-            $foundFiles = Get-ChildItem -Path $path -Recurse -File -ErrorAction SilentlyContinue | 
-                Where-Object { 
-                    $file = $_
-                    $prohibitedFilesList | ForEach-Object {
-                        $file.Name -like $_
-                    }
-                }
-            
-            # If prohibited files are found, add to the list
-            if ($foundFiles.Count -gt 0) {
-                $foundProhibitedFiles += $foundFiles
-            }
-        } catch {
-            Write-Host "Error accessing $path : $_" -ForegroundColor Red
-        }
-    }
-
-    # If no prohibited files are found, exit the function
-    if ($foundProhibitedFiles.Count -eq 0) {
-        Write-Host "No prohibited files were found." -ForegroundColor Green
-        return
-    }
-
-    # Display the found prohibited files
-    Write-Host "Found the following prohibited files:" -ForegroundColor Red
-    $foundProhibitedFiles | ForEach-Object { Write-Host "- $($_.FullName)" }
-
-    # Ask the user what action to take
-    $choice = Read-Host "Type 'delete' to delete all found files, 'prompt' to delete one by one, or 'no' to cancel [delete/prompt/no] (default: prompt)"
-
-    function Delete-ProhibitedFile {
-        param (
-            [string]$filePath
-        )
-
-        try {
-            Remove-Item -Path $filePath -Force -ErrorAction Stop
-            Write-Host "Deleted: $filePath" -ForegroundColor Green
-        } catch {
-            Write-Host "Failed to delete $filePath : $_" -ForegroundColor Red
-        }
-    }
-
-    switch ($choice.ToLower()) {
-        "delete" {
-            # Delete all found prohibited files
-            foreach ($file in $foundProhibitedFiles) {
-                Delete-ProhibitedFile -filePath $file.FullName
-            }
-        }
-        "prompt" {
-            # Ask the user to delete each found prohibited file one by one
-            foreach ($file in $foundProhibitedFiles) {
-                $answer = Read-Host "Delete $($file.FullName)? (Y/n)"
-                if ($answer -match '^[Yy]$') {
-                    Delete-ProhibitedFile -filePath $file.FullName
-                } else {
-                    Write-Host "Skipped deleting $($file.FullName)." -ForegroundColor Yellow
+        if ($files.Count -eq 0) {
+            Write-Host "No prohibited files named '$FileName' found in $SearchPath." -ForegroundColor Green
+        } else {
+            foreach ($file in $files) {
+                try {
+                    Remove-Item -LiteralPath $file.FullName -Force -ErrorAction Stop
+                    Write-Host "Removed prohibited file: $($file.FullName)" -ForegroundColor Green
+                } catch {
+                    Write-Host "Failed to remove file: $($file.FullName). Error: $_" -ForegroundColor Red
                 }
             }
         }
-        default {
-            Write-Host "Operation cancelled." -ForegroundColor Red
-        }
+    } catch {
+        Write-Host "An error occurred while searching/removing files: $_" -ForegroundColor Red
     }
 
-    Write-Host "`n--- Prohibited Files Intake Complete ---`n"
+    Write-Host "`n--- Remove Prohibited Files Complete ---`n"
 }
 
 function unwanted-Software {

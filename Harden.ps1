@@ -513,29 +513,29 @@ function Defensive-Countermeasures {
             Start-Sleep -Seconds 2
             $rtpStatus = (Get-MpComputerStatus).RealTimeProtectionEnabled
             if ($rtpStatus) {
-                Write-Host "✅ Real-Time Protection is enabled." -ForegroundColor $ColorKept
+                Write-Host "Real-Time Protection is enabled." -ForegroundColor $ColorKept
             } else {
-                Write-Host "⚠️ Real-Time Protection did NOT enable. Tamper Protection or Group Policy may be blocking it." -ForegroundColor $ColorWarning
+                Write-Host "Real-Time Protection did NOT enable. Tamper Protection or Group Policy may be blocking it." -ForegroundColor $ColorWarning
             }
         } catch {
-            Write-Host "❌ Failed to enable Real-Time Protection: $_" -ForegroundColor $ColorWarning
+            Write-Host "Failed to enable Real-Time Protection: $_" -ForegroundColor $ColorWarning
         }
 
         # Enable Behavior Monitoring
         Write-Host "Enabling Behavior Monitoring..." -ForegroundColor $ColorHeader
         Set-MpPreference -DisableBehaviorMonitoring $false -ErrorAction SilentlyContinue
-        Write-Host "✅ Behavior Monitoring enabled." -ForegroundColor $ColorKept
+        Write-Host "Behavior Monitoring enabled." -ForegroundColor $ColorKept
 
         # Enable Cloud Protection
         Write-Host "Enabling Cloud Protection..." -ForegroundColor $ColorHeader
         Set-MpPreference -MAPSReporting Advanced -ErrorAction SilentlyContinue
         Set-MpPreference -DisableBlockAtFirstSeen $false -ErrorAction SilentlyContinue
-        Write-Host "✅ Cloud Protection enabled." -ForegroundColor $ColorKept
+        Write-Host "Cloud Protection enabled." -ForegroundColor $ColorKept
 
         # Enable Automatic Sample Submission
         Write-Host "Enabling Automatic Sample Submission..." -ForegroundColor $ColorHeader
         Set-MpPreference -SubmitSamplesConsent 2 -ErrorAction SilentlyContinue
-        Write-Host "✅ Sample submission enabled." -ForegroundColor $ColorKept
+        Write-Host "Sample submission enabled." -ForegroundColor $ColorKept
 
         # Ensure Defender Service is running
         Write-Host "Checking Microsoft Defender service..." -ForegroundColor $ColorHeader
@@ -543,31 +543,31 @@ function Defensive-Countermeasures {
             $defenderService = Get-Service -Name "WinDefend" -ErrorAction Stop
             if ($defenderService.Status -ne 'Running') {
                 Start-Service -Name "WinDefend"
-                Write-Host "✅ Microsoft Defender service started." -ForegroundColor $ColorKept
+                Write-Host "Microsoft Defender service started." -ForegroundColor $ColorKept
             } else {
-                Write-Host "ℹ️ Microsoft Defender service is already running." -ForegroundColor $ColorKept
-            }  # <--- FIXED: Added this missing closing brace
+                Write-Host "Microsoft Defender service is already running." -ForegroundColor $ColorKept
+            }
         } catch {
-            Write-Host "❌ Could not start Microsoft Defender service: $_" -ForegroundColor $ColorWarning
+            Write-Host "Could not start Microsoft Defender service: $_" -ForegroundColor $ColorWarning
         }
 
         # Update Defender Definitions
         Write-Host "Updating Microsoft Defender definitions..." -ForegroundColor $ColorHeader
         try {
             Update-MpSignature -ErrorAction Stop
-            Write-Host "✅ Definitions updated." -ForegroundColor $ColorKept
+            Write-Host "Definitions updated." -ForegroundColor $ColorKept
         } catch {
-            Write-Host "❌ Failed to update Defender definitions: $_" -ForegroundColor $ColorWarning
+            Write-Host "Failed to update Defender definitions: $_" -ForegroundColor $ColorWarning
         }
 
         # Option 1: Block Known Malicious IPs
         $blockIP = Read-Host "Do you want to block known malicious IP addresses? (Y/n) [Default: Y]" -ForegroundColor $ColorPrompt
         if ($blockIP -match "^[Yy]$" -or $blockIP -eq "") {
             Write-Host "Blocking access to known malicious IP addresses..." -ForegroundColor $ColorHeader
-            $blockedIPs = @("192.168.1.100", "203.0.113.45")  # Add known malicious IPs
+            $blockedIPs = @("192.168.1.100", "203.0.113.45")
             foreach ($ip in $blockedIPs) {
                 New-NetFirewallRule -DisplayName "Block Malware IP: $ip" -Direction Outbound -Action Block -RemoteAddress $ip -ErrorAction SilentlyContinue
-                Write-Host "🔒 Blocked IP: $ip" -ForegroundColor $ColorRemoved
+                Write-Host "Blocked IP: $ip" -ForegroundColor $ColorRemoved
             }
         }
 
@@ -577,9 +577,9 @@ function Defensive-Countermeasures {
             Write-Host "Setting execution policy to 'Restricted'..." -ForegroundColor $ColorHeader
             try {
                 Set-ExecutionPolicy -ExecutionPolicy Restricted -Scope LocalMachine -Force
-                Write-Host "✅ Execution policy set to 'Restricted'." -ForegroundColor $ColorKept
+                Write-Host "Execution policy set to 'Restricted'." -ForegroundColor $ColorKept
             } catch {
-                Write-Host "❌ Failed to set execution policy: $_" -ForegroundColor $ColorWarning
+                Write-Host "Failed to set execution policy: $_" -ForegroundColor $ColorWarning
             }
         }
 
@@ -590,19 +590,18 @@ function Defensive-Countermeasures {
             try {
                 New-Item -Path "HKLM:\Software\Policies\Microsoft\Windows\System" -Force | Out-Null
                 Set-ItemProperty -Path "HKLM:\Software\Policies\Microsoft\Windows\System" -Name "DisableRegistryTools" -Value 1
-                Write-Host "✅ Registry editing disabled." -ForegroundColor $ColorKept
+                Write-Host "Registry editing disabled." -ForegroundColor $ColorKept
             } catch {
-                Write-Host "❌ Failed to disable registry tools: $_" -ForegroundColor $ColorWarning
+                Write-Host "Failed to disable registry tools: $_" -ForegroundColor $ColorWarning
             }
         }
 
     } catch {
-        Write-Host "❌ An unexpected error occurred: $_" -ForegroundColor Red
+        Write-Host "An unexpected error occurred: $_" -ForegroundColor Red
     }
 
     Write-Host "`n--- Defensive Countermeasures Complete ---`n" -ForegroundColor $ColorHeader
 }
-
 
 
 function Uncategorized-OS-Settings {

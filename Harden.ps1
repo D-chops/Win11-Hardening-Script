@@ -182,146 +182,146 @@ function Enable-Updates {
 }
 
 
-function User-Auditing {
-    Write-Host "`n--- Starting: User and Admin Auditing ---`n"
+function Local-Policies {
+    Write-Host "`n--- Starting: Local Policies ---`n"
 
-    $localUsers = Get-LocalUser
+    # Helper function to remove 'Take Ownership' privilege
+    function Remove-TakeOwnershipPrivilege {
+        Write-Host "Removing 'Take Ownership' privilege from all users..."
+        $exportInf = "$env:TEMP\export.inf"
+        $modifiedInf = "$env:TEMP\modified.inf"
+        $seceditLog = "$env:TEMP\secedit.log"
 
-    foreach ($user in $localUsers) {
-        # Skip system/built-in/current accounts
-        if (
-            $user.Name -in @("Administrator", "Guest", "DefaultAccount", "WDAGUtilityAccount") -or
-            $user.Name -eq $env:USERNAME
-        ) {
-            Write-Host "Skipping system or currently logged-in account: $($user.Name)"
-            continue
+        try {
+            # Export current security policy
+            secedit /export /cfg $exportInf /quiet
+
+            # Read the exported INF content
+            $content = Get-Content $exportInf
+
+            # Clear the SeTakeOwnershipPrivilege line
+            $newContent = $content -replace 'SeTakeOwnershipPrivilege\s*=\s*.*', 'SeTakeOwnershipPrivilege ='
+
+            # Save the modified INF file with Unicode encoding
+            $newContent | Set-Content -Path $modifiedInf -Encoding Unicode
+
+            # Apply the modified security policy
+            secedit /configure /db secedit.sdb /cfg $modifiedInf /quiet /log $seceditLog
+
+            # Cleanup temporary files
+            Remove-Item $exportInf, $modifiedInf -Force -ErrorAction SilentlyContinue
+
+            Write-Host "'Take Ownership' privilege successfully removed from all users."
+            Write-Host "Note: A reboot or user logoff/logon may be required for the changes to take effect."
         }
+        catch {
+            Write-Host "Error removing 'Take Ownership' privilege: $_" -ForegroundColor Red
+        }
+    }
 
-        # Prompt for authorization
-        $response = Read-Host "Is '$($user.Name)' an Authorized User? (Y/n) [Default: Y]"
+    # Auditing for Logon Events
+    $auditLogon = Read-Host "Enable auditing for Logon Events? (Y/n) [Default: Y]"
+    if ($auditLogon -match "^[Yy]$" -or $auditLogon -eq "") {
+        Write-Host "Enabling auditing for Logon and Logoff events..."
+        try {
+            auditpol /set /subcategory:"Logon" /success:enable /failure:enable
+            auditpol /set /subcategory:"Logoff" /success:enable /failure:enable
+            Write-Host "Auditing for Logon events enabled."
+        } catch {
+            Write-Host "Failed to enable auditing for Logon events: $_" -ForegroundColor Yellow
+        }
+    }
+    elseif ($auditLogon -match "^[Nn]$") {
+        Write-Host "Disabling auditing for Logon and Logoff events..."
+        try {
+            auditpol /set /subcategory:"Logon" /success:disable /failure:disable
+            auditpol /set /subcategory:"Logoff" /success:disable /failure:disable
+            Write-Host "Auditing for Logon events disabled."
+        } catch {
+            Write-Host "Failed to disable auditing for Logon events: $_" -ForegroundColor Yellow
+        }
+    } else {
+        Write-Host "Skipping auditing changes for Logon events."
+    }
 
-        if ($response -eq "" -or $response -match "^[Yy]$") {
-            Write-Host "'$($user.Name)' marked as Authorized.`n"
+    # Remove 'Take Ownership' privilege
+    $removeOwnership = Read-Host "Remove the 'Take Ownership' privilege from all users? (Y/n) [Default: Y]"
+    if ($removeOwnership -match "^[Yy]$" -or $removeOwnership -eq "") {
+        Remove-TakeOwnershipPrivilege
+    } else {
+        Write-Host "Skipped removal of 'Take Ownership' privilege."
+    }
 
-            # Check if user is an admin
-            $isAdmin = Get-LocalGroupMember -Group "Administrators" | Where-Object { $_.Name -eq $user.Name }
+    # Enable/Disable Ctrl+Alt+Del requirement for logon
+    $ctrlAltDel = Read-Host "Enable Ctrl+Alt+Del requirement for logon? (Y/n) [Default: Y]"
+    $systemPoliciesPath = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System"
+    if (-not (Test-Path $systemPoliciesPath)) {
+        New-Item -Path $systemPoliciesPath -Force | Out-Null
+    }
 
-            if ($isAdmin) {
-                # Offer to downgrade admin
-                $downgrade = Read-Host "'$($user.Name)' is an Administrator. Downgrade to standard user? (Y/n) [Default: n]"
-                if ($downgrade -match "^[Yy]$") {
-                    try {
-                        Remove-LocalGroupMember -Group "Administrators" -Member $user.Name -ErrorAction Stop
+    if ($ctrlAltDel -match "^[Yy]$" -or $ctrlAltDel -eq "") {
+        Write-Host "Enabling Ctrl+Alt+Del requirement for logon..."
+        try {
+            Set-ItemProperty -Path $systemPoliciesPath -Name "DisableCAD" -Value 0
+            Write-Host "Ctrl+Alt+Del requirement enabled."
+        } catch {
+            Write-Host "Failed to enable Ctrl+Alt+Del requirement: $_" -ForegroundColor Yellow
+        }
+    }
+    elseif ($ctrlAltDel -match "^[Nn]$") {
+        Write-Host "Disabling Ctrl+Alt+Del requirement for logon..."
+        try {
+            Set-ItemProperty -Path $systemPoliciesPath -Name "DisableCAD" -Value 1
+            Write-Host "Ctrl+Alt+Del requirement disabled."
+        } catch {
+            Write-Host "Failed to disable Ctrl+Alt+Del requirement: $_" -ForegroundColor Yellow
+        }
+    } else {
+        Write-Host "Skipping Ctrl+Alt+Del requirement changes."
+    }
 
-                        # Check if user is already in Users group
-                        $inUsersGroup = Get-LocalGroupMember -Group "Users" | Where-Object { $_.Name -eq $user.Name }
+    # PowerShell Execution Policy Handling
+    $currentUser = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $principal = New-Object Security.Principal.WindowsPrincipal($currentUser)
+    $isAdmin = $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 
-                        if (-not $inUsersGroup) {
-                            Add-LocalGroupMember -Group "Users" -Member $user.Name -ErrorAction Stop
-                        } else {
-                            Write-Host "'$($user.Name)' is already a member of the Users group."
-                        }
-
-                        Write-Host "'$($user.Name)' downgraded to standard user." -ForegroundColor Green
-                    } catch {
-                        Write-Host "Failed to downgrade '$($user.Name)': $_" -ForegroundColor Yellow
-                    }
-                }
-            } else {
-                # Offer to upgrade to admin
-                $adminResponse = Read-Host "Should '$($user.Name)' be upgraded to Administrator? (Y/n) [Default: n]"
-                if ($adminResponse -match "^[Yy]$") {
-                    try {
-                        Add-LocalGroupMember -Group "Administrators" -Member $user.Name -ErrorAction Stop
-                        Write-Host "'$($user.Name)' added to Administrators group." -ForegroundColor Green
-                    } catch {
-                        Write-Host "Failed to add '$($user.Name)' to Administrators: $_" -ForegroundColor Yellow
-                    }
-                }
-            }
-
-        } elseif ($response -match "^[Nn]$") {
+    if ($isAdmin) {
+        Write-Host "Current user is an administrator."
+        $changePolicy = Read-Host "Change PowerShell execution policy for ALL users? (Y/n) [Default: N]"
+        if ($changePolicy -match "^[Yy]$") {
             try {
-                Remove-LocalUser -Name $user.Name -ErrorAction Stop
-                Write-Host "'$($user.Name)' has been removed.`n"
+                Set-ExecutionPolicy -ExecutionPolicy Restricted -Scope LocalMachine -Force
+                $effectivePolicy = Get-ExecutionPolicy -Scope LocalMachine
+                $currentPolicy = Get-ExecutionPolicy
+                if ($effectivePolicy -ne $currentPolicy) {
+                    Write-Host "Execution policy set but overridden by another scope."
+                    Write-Host "Effective policy: $currentPolicy"
+                    Write-Host "Run 'Get-ExecutionPolicy -List' to check policy precedence."
+                } else {
+                    Write-Host "Execution policy set to 'Restricted' for all users."
+                }
             } catch {
-                Write-Host "⚠️ Access Denied or Error removing '$($user.Name)': $_`n"
+                Write-Host "Failed to change execution policy: $_" -ForegroundColor Yellow
             }
         } else {
-            Write-Host "Invalid input. Skipping user '$($user.Name)'.`n"
+            Write-Host "Skipping execution policy change for all users."
         }
-    }
-
-    # Option to add a new user at the end
-    $addUserResponse = Read-Host "Would you like to add a new local user? (Y/n) [Default: N]"
-    if ($addUserResponse -match "^[Yy]$") {
-        $newUserName = Read-Host "Enter the new username"
-        $newUserPassword = Read-Host "Enter the password for '$newUserName'"
-        try {
-            New-LocalUser -Name $newUserName -Password (ConvertTo-SecureString $newUserPassword -AsPlainText -Force)
-            Set-LocalUser -Name $newUserName -UserMayChangePassword $true
-            Set-LocalUser -Name $newUserName -PasswordNeverExpires $false
-            Write-Host "User '$newUserName' created successfully."
-
-            $newAdminResponse = Read-Host "Should '$newUserName' be upgraded to Administrator? (Y/n) [Default: n]"
-            if ($newAdminResponse -match "^[Yy]$") {
-                try {
-                    Add-LocalGroupMember -Group "Administrators" -Member $newUserName -ErrorAction Stop
-                    Write-Host "'$newUserName' added to Administrators group." -ForegroundColor Green
-                } catch {
-                    Write-Host "Failed to add '$newUserName' to Administrators: $_" -ForegroundColor Yellow
-                }
+    } else {
+        $changePolicy = Read-Host "Change your own PowerShell execution policy? (Y/n) [Default: N]"
+        if ($changePolicy -match "^[Yy]$") {
+            try {
+                Set-ExecutionPolicy -ExecutionPolicy Restricted -Scope CurrentUser -Force
+                Write-Host "Execution policy set to 'Restricted' for current user."
+            } catch {
+                Write-Host "Failed to change execution policy: $_" -ForegroundColor Yellow
             }
-        } catch {
-            Write-Host "Failed to create user '$newUserName': $_"
+        } else {
+            Write-Host "Skipping execution policy change for current user."
         }
     }
 
-    # Set temporary password for all users
-    $TempPassword = "1CyberPatriot!"  # Replace with your desired temp password
-    foreach ($user in $localUsers) {
-        try {
-            Set-LocalUser -Name $user.Name -Password (ConvertTo-SecureString $TempPassword -AsPlainText -Force)
-            Set-LocalUser -Name $user.Name -PasswordNeverExpires $false
-            Set-LocalUser -Name $user.Name -UserMayChangePassword $true
-        } catch {
-            Write-Host "Failed to update password for '$($user.Name)': $_"
-        }
-    }
-    Write-Host "Passwords for all users set to temporary value and will require change at next logon."
-
-    # Disable and rename Guest account
-    try {
-        Disable-LocalUser -Name "Guest"
-        Rename-LocalUser -Name "Guest" -NewName "DisabledGuest"
-        Write-Host "Guest account disabled and renamed to 'DisabledGuest'."
-    } catch {
-        Write-Host "Failed to disable or rename Guest account: $_"
-    }
-
-    # Disable and rename Administrator account
-    try {
-        Disable-LocalUser -Name "Administrator"
-        Rename-LocalUser -Name "Administrator" -NewName "SecAdminDisabled"
-        Write-Host "Administrator account disabled and renamed to 'SecAdminDisabled'."
-    } catch {
-        Write-Host "Failed to disable or rename Administrator account: $_"
-    }
-
-    # Enforce password expiration and allow password change
-    $localUsers = Get-LocalUser
-    foreach ($user in $localUsers) {
-        try {
-            Set-LocalUser -Name $user.Name -PasswordNeverExpires $false
-            Set-LocalUser -Name $user.Name -UserMayChangePassword $true
-        } catch {
-            Write-Host "Failed to update '$($user.Name)': $_"
-        }
-    }
-
-    Write-Host "`n--- User and Admin Auditing Complete ---`n"
+    Write-Host "`n--- Local Policies Complete ---`n"
 }
-
 
 function Review-GroupMembers {
     param (

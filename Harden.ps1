@@ -400,30 +400,19 @@ function Local-Policies {
         }
     }
 
-    # Take Ownership Privilege (Note: No registry key sets this directly)
+    # Take Ownership Privilege (informational only, no reliable registry method)
     $takeOwnership = Read-Host "Do you want to enable Take Ownership Privilege? (Y/N) [Default: Y]" -ForegroundColor $ColorPrompt
-
     if ($takeOwnership -match "^[Yy]$" -or $takeOwnership -eq "") {
         Write-Host "Enabling Take Ownership Privilege..." -ForegroundColor $ColorHeader
-        try {
-            # Warning: Needs tools like secedit or ntrights (not registry-based)
-            Write-Host "Note: Enabling this privilege requires manual configuration or external tools like ntrights.exe" -ForegroundColor Yellow
-        } catch {
-            Write-Host "Failed to enable Take Ownership Privilege: $_" -ForegroundColor $ColorWarning
-        }
+        Write-Host "⚠️ Note: This requires manual configuration via secpol.msc or external tools (e.g. ntrights.exe)" -ForegroundColor Yellow
     } elseif ($takeOwnership -match "^[Nn]$") {
         Write-Host "Disabling Take Ownership Privilege..." -ForegroundColor $ColorHeader
-        try {
-            # No registry key to remove - this is just a placeholder
-            Write-Host "No action taken. Manual removal from user rights assignment is required." -ForegroundColor Yellow
-        } catch {
-            Write-Host "Failed to disable Take Ownership Privilege: $_" -ForegroundColor $ColorWarning
-        }
+        Write-Host "⚠️ Note: This must be removed manually via Local Security Policy > User Rights Assignment" -ForegroundColor Yellow
     } else {
         Write-Host "Invalid input. Please enter Y or N." -ForegroundColor $ColorWarning
     }
 
-    # Enable/disable Ctrl+Alt+Del requirement for logon
+    # Enable/disable Ctrl+Alt+Del requirement
     $ctrlAltDel = Read-Host "Would you like to enable Ctrl+Alt+Del requirement for logon? (Y/n) [Default: Y]" -ForegroundColor $ColorPrompt
     $systemPoliciesPath = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System"
 
@@ -445,14 +434,42 @@ function Local-Policies {
         }
     }
 
-    # Optional: Check if current user is administrator
+    # Execution Policy Change — optional for admin or standard user
     $currentUser = [Security.Principal.WindowsIdentity]::GetCurrent()
     $principal = New-Object Security.Principal.WindowsPrincipal($currentUser)
-    if ($principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-        Write-Host "Current user is an administrator. Skipping execution policy change."
-    }
-}
+    $isAdmin = $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 
+    if ($isAdmin) {
+        Write-Host "Current user is an administrator." -ForegroundColor $ColorHeader
+
+        $changePolicy = Read-Host "Do you want to change PowerShell execution policy for ALL users? (Y/n) [Default: N]"
+        if ($changePolicy -match "^[Yy]$") {
+            try {
+                Set-ExecutionPolicy -ExecutionPolicy Restricted -Scope LocalMachine -Force
+                Write-Host "Execution policy set to 'Restricted' for all users." -ForegroundColor $ColorKept
+            } catch {
+                Write-Host "Failed to change execution policy: $_" -ForegroundColor $ColorWarning
+            }
+        } else {
+            Write-Host "Skipping execution policy change." -ForegroundColor $ColorRemoved
+        }
+
+    } else {
+        $changePolicy = Read-Host "Do you want to change your own execution policy? (Y/n) [Default: N]"
+        if ($changePolicy -match "^[Yy]$") {
+            try {
+                Set-ExecutionPolicy -ExecutionPolicy Restricted -Scope CurrentUser -Force
+                Write-Host "Execution policy set to 'Restricted' for current user." -ForegroundColor $ColorKept
+            } catch {
+                Write-Host "Failed to change execution policy: $_" -ForegroundColor $ColorWarning
+            }
+        } else {
+            Write-Host "Skipping execution policy change for current user." -ForegroundColor $ColorRemoved
+        }
+    }
+
+    Write-Host "`n--- Local Policies Complete ---`n"
+}
 
 function Defensive-Countermeasures {
     Write-Host "`n--- Starting: Defensive Countermeasures ---`n" -ForegroundColor $ColorHeader

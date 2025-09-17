@@ -378,64 +378,59 @@ function Account-Policies {
 #  Function Definitions
 # =========================
 function Local-Policies {
-   Write-Host "n--- Starting: Local Policies ---n"
+    Write-Host "`n--- Starting: Local Policies ---`n"
 
-   #Options to enable\disable audit logon events
+    # Enable/disable auditing for logon events
     $auditLogon = Read-Host "Would you like to enable auditing for Logon Events? (Y/n) [Default: Y]" -ForegroundColor $ColorPrompt
     if ($auditLogon -match "^[Yy]$" -or $auditLogon -eq "") {
         Write-Host "Enabling auditing for Logon Events..." -ForegroundColor $ColorHeader
-    try {
-        # Enable Audit logon events
-        auditpol /set /subcategory:"Logon/Logoff" /success:enable /failure:enable
-        Write-Host "Auditing for Logon Events enabled." -ForegroundColor $ColorKept
-    } catch {
-        Write-Host "Failed to enable auditing for Logon Events: $_" -ForegroundColor $ColorWarning
-}
-    } elseif ($auditlogin -match "^[Nn]$") {
-        Write-Host "Disabling audit logon events..." -ForegroundColor $ColorHeader
-       try { 
-        # Disable Audit logon events
-        auditpol /set /subcategory:"Logon/Logoff" /success:disable /failure:disable
-        Write-Host "Auditing for Logon Events disabled." -ForegroundColor $ColorRemoved
-    } catch {
-        Write-Host "Failed to disable auditing for Logon Events: $_" -ForegroundColor $ColorWarning
-    }
-}
- # Option to Enable\Disable Take Ownership Privilege 
-$takeOwnership = Read-Host "Do you want to enable Take Ownership Privilege? (Y/N) [Default: Y]" -ForegroundColor $ColorPrompt
-
-if ($takeOwnership -match "^[Yy]$" -or $takeOwnership -eq "") { 
-    Write-Host " Enabling Take Ownership Privilege..." -ForegroundColor $ColorHeader
-    try {
-        # Enable Take Ownership Privilege
-        $regPath = "HKLM:\Software\Microsoft\Windows NT\CurrentVersion\SeDenyInteractiveLogonRight"
-        Set-ItemProperty -Path $regPath -Name "SeTakeOwnershipPrivilege" -Value 1
-        Write-Host "Take Ownership Privilege enabled." -ForegroundColor $ColorKept
-    } catch {
-        Write-Host "Failed to enable Take Ownership Privilege: $_" -ForegroundColor $ColorWarning
+        try {
+            auditpol /set /subcategory:"Logon/Logoff" /success:enable /failure:enable
+            Write-Host "Auditing for Logon Events enabled." -ForegroundColor $ColorKept
+        } catch {
+            Write-Host "Failed to enable auditing for Logon Events: $_" -ForegroundColor $ColorWarning
+        }
+    } elseif ($auditLogon -match "^[Nn]$") {
+        Write-Host "Disabling auditing for Logon Events..." -ForegroundColor $ColorHeader
+        try {
+            auditpol /set /subcategory:"Logon/Logoff" /success:disable /failure:disable
+            Write-Host "Auditing for Logon Events disabled." -ForegroundColor $ColorRemoved
+        } catch {
+            Write-Host "Failed to disable auditing for Logon Events: $_" -ForegroundColor $ColorWarning
+        }
     }
 
-} elseif ($takeOwnership -match "^[Nn]$") {
-    Write-Host "Disabling Take Ownership Privilege..." -ForegroundColor $ColorHeader
-    try {
-        # Disable Take Ownership Privilege
-        $regPath = "HKLM:\Software\Microsoft\Windows NT\CurrentVersion\SeDenyInteractiveLogonRight"
-        Remove-ItemProperty -Path $regPath -Name "SeTakeOwnershipPrivilege"
-        Write-Host "Take Ownership Privilege disabled." -ForegroundColor $ColorRemoved
-    } catch {
-        Write-Host "Failed to disable Take Ownership Privilege: $_" -ForegroundColor $ColorWarning
+    # Take Ownership Privilege (Note: No registry key sets this directly)
+    $takeOwnership = Read-Host "Do you want to enable Take Ownership Privilege? (Y/N) [Default: Y]" -ForegroundColor $ColorPrompt
+
+    if ($takeOwnership -match "^[Yy]$" -or $takeOwnership -eq "") {
+        Write-Host "Enabling Take Ownership Privilege..." -ForegroundColor $ColorHeader
+        try {
+            # Warning: Needs tools like secedit or ntrights (not registry-based)
+            Write-Host "Note: Enabling this privilege requires manual configuration or external tools like ntrights.exe" -ForegroundColor Yellow
+        } catch {
+            Write-Host "Failed to enable Take Ownership Privilege: $_" -ForegroundColor $ColorWarning
+        }
+    } elseif ($takeOwnership -match "^[Nn]$") {
+        Write-Host "Disabling Take Ownership Privilege..." -ForegroundColor $ColorHeader
+        try {
+            # No registry key to remove - this is just a placeholder
+            Write-Host "No action taken. Manual removal from user rights assignment is required." -ForegroundColor Yellow
+        } catch {
+            Write-Host "Failed to disable Take Ownership Privilege: $_" -ForegroundColor $ColorWarning
+        }
+    } else {
+        Write-Host "Invalid input. Please enter Y or N." -ForegroundColor $ColorWarning
     }
-} else {
-    Write-Host "Invalid input. Please enter Y or N." -ForegroundColor $ColorWarning
-}
-     
-    # Option to enable\disable ctrl+alt+del requirement for logon
+
+    # Enable/disable Ctrl+Alt+Del requirement for logon
     $ctrlAltDel = Read-Host "Would you like to enable Ctrl+Alt+Del requirement for logon? (Y/n) [Default: Y]" -ForegroundColor $ColorPrompt
+    $systemPoliciesPath = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System"
+
     if ($ctrlAltDel -match "^[Yy]$" -or $ctrlAltDel -eq "") {
         Write-Host "Enabling Ctrl+Alt+Del requirement for logon..." -ForegroundColor $ColorHeader
         try {
-            # Enable Ctrl+Alt+Del requirement for logon
-            Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" 
+            Set-ItemProperty -Path $systemPoliciesPath -Name "DisableCAD" -Value 0
             Write-Host "Ctrl+Alt+Del requirement for logon enabled." -ForegroundColor $ColorKept
         } catch {
             Write-Host "Failed to enable Ctrl+Alt+Del requirement: $_" -ForegroundColor $ColorWarning
@@ -443,23 +438,21 @@ if ($takeOwnership -match "^[Yy]$" -or $takeOwnership -eq "") {
     } elseif ($ctrlAltDel -match "^[Nn]$") {
         Write-Host "Disabling Ctrl+Alt+Del requirement for logon..." -ForegroundColor $ColorHeader
         try {
-            # Disable Ctrl+Alt+Del requirement for logon
-            Set-ItemProperty -Path $regPath -Name "DisableCAD" -Value 1
+            Set-ItemProperty -Path $systemPoliciesPath -Name "DisableCAD" -Value 1
             Write-Host "Ctrl+Alt+Del requirement for logon disabled." -ForegroundColor $ColorRemoved
         } catch {
             Write-Host "Failed to disable Ctrl+Alt+Del requirement: $_" -ForegroundColor $ColorWarning
         }
-        # Check if the current user is an administrator
-    $currentUser = [Security.Principal.WindowsIdentity]::GetCurrent()
-    $adminRole = [Security.Principal.WindowsBuiltInRole]::Administrator
-    $isAdmin = $currentUser.Groups -contains (New-Object Security.Principal.NTAccount("BUILTIN", "Administrators")).Translate([Security.Principal.SecurityIdentifier]).Value
-
-    if ($isAdmin) {
-        Write-Host "Current user is an administrator. Skipping execution policy change."
-        return
     }
+
+    # Optional: Check if current user is administrator
+    $currentUser = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $principal = New-Object Security.Principal.WindowsPrincipal($currentUser)
+    if ($principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+        Write-Host "Current user is an administrator. Skipping execution policy change."
     }
 }
+
 
 function Defensive-Countermeasures {
     Write-Host "`n--- Starting: Defensive Countermeasures ---`n" -ForegroundColor $ColorHeader

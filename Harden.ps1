@@ -269,7 +269,7 @@ function User-Auditing {
     }
 
     # Set temporary password for all users
-    $TempPassword = "TempP@ssw0rd!"  # Replace with your desired temp password
+    $TempPassword = "1CyberPatriot!"  # Replace with your desired temp password
     foreach ($user in $localUsers) {
         try {
             Set-LocalUser -Name $user.Name -Password (ConvertTo-SecureString $TempPassword -AsPlainText -Force)

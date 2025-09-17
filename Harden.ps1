@@ -408,7 +408,7 @@ function Local-Policies {
         Write-Host "Removing 'Take Ownership' privilege from all users..." -ForegroundColor $ColorHeader
         try {
             $infPath = "$env:TEMP\remove_take_ownership.inf"
-            $logPath = "$env:TEMP\secedit_log.txt"
+            $logPath = "$env:TEMP\secedit_takeownership_log.txt"
 
             $infContent = @"
 [Unicode]
@@ -422,10 +422,13 @@ SeTakeOwnershipPrivilege =
 
             $infContent | Out-File -Encoding ASCII -FilePath $infPath -Force
 
-            secedit /configure /db "$env:SystemRoot\security\Database\takeownership.sdb" /cfg $infPath /log $logPath /quiet
+            secedit /configure /db "$env:windir\security\database\takeownership.sdb" /cfg $infPath /log $logPath /quiet
 
             Write-Host "'Take Ownership' privilege removed from all users." -ForegroundColor $ColorRemoved
+
+            # Clean up temp files
             Remove-Item $infPath -Force -ErrorAction SilentlyContinue
+            Remove-Item $logPath -Force -ErrorAction SilentlyContinue
         } catch {
             Write-Host "Failed to remove 'Take Ownership' privilege: $_" -ForegroundColor $ColorWarning
         }
@@ -455,25 +458,23 @@ SeTakeOwnershipPrivilege =
         }
     }
 
-    # Execution Policy change
+    # Execution Policy Handling
     $currentUser = [Security.Principal.WindowsIdentity]::GetCurrent()
     $principal = New-Object Security.Principal.WindowsPrincipal($currentUser)
     $isAdmin = $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 
     if ($isAdmin) {
         Write-Host "Current user is an administrator." -ForegroundColor $ColorHeader
-
         $changePolicy = Read-Host "Do you want to change PowerShell execution policy for ALL users? (Y/n) [Default: N]"
         if ($changePolicy -match "^[Yy]$") {
             try {
                 Set-ExecutionPolicy -ExecutionPolicy Restricted -Scope LocalMachine -Force
                 $effectivePolicy = Get-ExecutionPolicy -Scope LocalMachine
                 $currentPolicy = Get-ExecutionPolicy
-
                 if ($effectivePolicy -ne $currentPolicy) {
-                    Write-Host "Execution policy was set, but is overridden by a more specific policy." -ForegroundColor $ColorWarning
+                    Write-Host "Execution policy was set, but is overridden by another scope." -ForegroundColor $ColorWarning
                     Write-Host "Effective policy: $currentPolicy"
-                    Write-Host "Run 'Get-ExecutionPolicy -List' for details." -ForegroundColor $ColorWarning
+                    Write-Host "Run 'Get-ExecutionPolicy -List' to check policy precedence." -ForegroundColor $ColorWarning
                 } else {
                     Write-Host "Execution policy set to 'Restricted' for all users." -ForegroundColor $ColorKept
                 }
@@ -483,7 +484,6 @@ SeTakeOwnershipPrivilege =
         } else {
             Write-Host "Skipping execution policy change." -ForegroundColor $ColorRemoved
         }
-
     } else {
         $changePolicy = Read-Host "Do you want to change your own execution policy? (Y/n) [Default: N]"
         if ($changePolicy -match "^[Yy]$") {

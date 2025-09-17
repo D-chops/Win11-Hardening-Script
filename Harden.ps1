@@ -504,94 +504,57 @@ SeTakeOwnershipPrivilege =
 
 function Defensive-Countermeasures {
     Write-Host "`n--- Starting: Defensive Countermeasures ---`n" -ForegroundColor $ColorHeader
-    # Check Tamper Protection status
-function Get-TamperProtectionStatus {
-    $tamperRegPath = "HKLM:\SOFTWARE\Microsoft\Windows Defender\Features"
-    $tamperValueName = "TamperProtection"
-    try {
-        $tamperStatus = Get-ItemPropertyValue -Path $tamperRegPath -Name $tamperValueName -ErrorAction Stop
-        if ($tamperStatus -eq 5) {
-            return $true
-        } else {
-            return $false
-        }
-    } catch {
-        Write-Host "Could not read Tamper Protection registry key. Assuming disabled." -ForegroundColor Yellow
-        return $false
-    }
-}
-
-# Check Real-Time Protection group policy setting
-function Get-RealTimeProtectionPolicyStatus {
-    $rtpRegPath = "HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender\Real-Time Protection"
-    $rtpValueName = "DisableRealtimeMonitoring"
-    try {
-        $rtpStatus = Get-ItemPropertyValue -Path $rtpRegPath -Name $rtpValueName -ErrorAction Stop
-        if ($rtpStatus -eq 1) {
-            return $false  # Real-Time Protection disabled by policy
-        } else {
-            return $true   # Enabled or not configured
-        }
-    } catch {
-        # Key doesn't exist = policy not set, so RT protection enabled by default
-        return $true
-    }
-}
-
-# Check current Defender status
-function Get-DefenderStatus {
-    try {
-        $status = Get-MpComputerStatus
-        return $status.RealTimeProtectionEnabled
-    } catch {
-        Write-Host "Could not retrieve Defender status." -ForegroundColor Yellow
-        return $null
-    }
-}
-
-# Main check
-$tamperEnabled = Get-TamperProtectionStatus
-$policyAllowsRTP = Get-RealTimeProtectionPolicyStatus
-$currentRTP = Get-DefenderStatus
-
-Write-Host "`n=== Microsoft Defender Real-Time Protection Status Check ===`n"
-
-Write-Host "Tamper Protection Enabled: $tamperEnabled"
-Write-Host "Group Policy Allows Real-Time Protection: $policyAllowsRTP"
-Write-Host "Current Real-Time Protection Status: $currentRTP"
-
-if ($tamperEnabled) {
-    Write-Host "`nWarning: Tamper Protection is enabled and may block changes to Real-Time Protection settings." -ForegroundColor Yellow
-}
-
-if (-not $policyAllowsRTP) {
-    Write-Host "`nWarning: Group Policy disables Real-Time Protection." -ForegroundColor Yellow
-}
-
-if (-not $currentRTP) {
-    Write-Host "`nReal-Time Protection is currently disabled." -ForegroundColor Red
-} else {
-    Write-Host "`nReal-Time Protection is currently enabled." -ForegroundColor Green
-}
-
-Write-Host "`nTo enable Real-Time Protection via script, Tamper Protection and/or Group Policy settings must first allow it."
-
 
     try {
-        # Enable Real-Time Protection
-        Write-Host "Enabling Microsoft Defender Real-Time Protection..." -ForegroundColor $ColorHeader
-        try {
-            Set-MpPreference -DisableRealtimeMonitoring $false -ErrorAction Stop
-            Start-Sleep -Seconds 2
-            $rtpStatus = (Get-MpComputerStatus).RealTimeProtectionEnabled
-            if ($rtpStatus) {
-                Write-Host "Real-Time Protection is enabled." -ForegroundColor $ColorKept
+        # Function to enable Real-Time Protection including policy fix
+        function Enable-DefenderRealTimeProtection {
+            $policyPath = "HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender\Real-Time Protection"
+            $policyName = "DisableRealtimeMonitoring"
+
+            if (Test-Path $policyPath) {
+                $policyValue = Get-ItemProperty -Path $policyPath -Name $policyName -ErrorAction SilentlyContinue
+
+                if ($null -ne $policyValue) {
+                    if ($policyValue.$policyName -eq 1) {
+                        Write-Host "Group Policy disables Real-Time Protection. Attempting to enable..."
+                        try {
+                            Set-ItemProperty -Path $policyPath -Name $policyName -Value 0 -ErrorAction Stop
+                            Write-Host "Registry updated to allow Real-Time Protection. A reboot or gpupdate may be required."
+                        } catch {
+                            Write-Host "Failed to update Group Policy registry key: $_"
+                            return $false
+                        }
+                    } else {
+                        Write-Host "Group Policy allows Real-Time Protection."
+                    }
+                } else {
+                    Write-Host "No Group Policy disabling Real-Time Protection found."
+                }
             } else {
-                Write-Host "Real-Time Protection did NOT enable. Tamper Protection or Group Policy may be blocking it." -ForegroundColor $ColorWarning
+                Write-Host "No Group Policy for Real-Time Protection found."
             }
-        } catch {
-            Write-Host "Failed to enable Real-Time Protection: $_" -ForegroundColor $ColorWarning
+
+            # Attempt to enable Real-Time Protection
+            try {
+                Set-MpPreference -DisableRealtimeMonitoring $false -ErrorAction Stop
+                Start-Sleep -Seconds 2
+                $rtpStatus = (Get-MpComputerStatus).RealTimeProtectionEnabled
+                if ($rtpStatus) {
+                    Write-Host "Real-Time Protection successfully enabled."
+                    return $true
+                } else {
+                    Write-Host "Real-Time Protection did NOT enable. Tamper Protection or remaining policies may be blocking it."
+                    return $false
+                }
+            } catch {
+                Write-Host "Failed to enable Real-Time Protection: $_"
+                return $false
+            }
         }
+
+        # Enable Real-Time Protection with policy fix
+        Write-Host "Enabling Microsoft Defender Real-Time Protection..." -ForegroundColor $ColorHeader
+        Enable-DefenderRealTimeProtection | Out-Null
 
         # Enable Behavior Monitoring
         Write-Host "Enabling Behavior Monitoring..." -ForegroundColor $ColorHeader
@@ -636,7 +599,7 @@ Write-Host "`nTo enable Real-Time Protection via script, Tamper Protection and/o
         $blockIP = Read-Host "Do you want to block known malicious IP addresses? (Y/n) [Default: Y]" -ForegroundColor $ColorPrompt
         if ($blockIP -match "^[Yy]$" -or $blockIP -eq "") {
             Write-Host "Blocking access to known malicious IP addresses..." -ForegroundColor $ColorHeader
-            $blockedIPs = @("192.168.1.100", "203.0.113.45")
+            $blockedIPs = @("192.168.1.100", "203.0.113.45")  # Add known malicious IPs
             foreach ($ip in $blockedIPs) {
                 New-NetFirewallRule -DisplayName "Block Malware IP: $ip" -Direction Outbound -Action Block -RemoteAddress $ip -ErrorAction SilentlyContinue
                 Write-Host "Blocked IP: $ip" -ForegroundColor $ColorRemoved
@@ -674,7 +637,6 @@ Write-Host "`nTo enable Real-Time Protection via script, Tamper Protection and/o
 
     Write-Host "`n--- Defensive Countermeasures Complete ---`n" -ForegroundColor $ColorHeader
 }
-
 
 function Uncategorized-OS-Settings {
     Write-Host "`n--- Starting: Uncategorized OS Settings ---`n"

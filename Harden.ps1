@@ -1056,90 +1056,49 @@ function Prohibited-Files {
     Write-Host "`n--- Remove Prohibited Files Complete ---`n"
 }
 
-function Unwanted-Software {
+function UnwantedSoftware {
     Write-Host "`n--- Starting: Unwanted Software Removal ---`n"
 
-    # List of unwanted software display names (partial match)
-    $unwantedSoftware = @(
-        "Angry IP Scanner",
-        "Everything"
+    # List of unwanted executable filenames (you can add more patterns here)
+    $unwantedFiles = @(
+        "Everything.exe",
+        "Angry IP Scanner.exe",
+        "AngryIPScanner.exe",
+        "AngryIPScannerPortable.exe"
     )
 
-    foreach ($softwareName in $unwantedSoftware) {
-        try {
-            # Search installed software in 64-bit and 32-bit registry locations
-            $uninstallKeys = @(
-                "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
-                "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"
-            )
+    # Define drives to scan (C: and any others)
+    $drives = Get-PSDrive -PSProvider FileSystem | Where-Object { $_.Free -gt 0 } | Select-Object -ExpandProperty Root
 
-            $found = $false
+    foreach ($drive in $drives) {
+        Write-Host "Scanning drive $drive for unwanted files..."
 
-            foreach ($keyPath in $uninstallKeys) {
-                $apps = Get-ChildItem -Path $keyPath -ErrorAction SilentlyContinue
+        foreach ($filePattern in $unwantedFiles) {
+            try {
+                $foundFiles = Get-ChildItem -Path $drive -Filter $filePattern -Recurse -ErrorAction SilentlyContinue -Force
 
-                foreach ($app in $apps) {
-                    $displayName = (Get-ItemProperty -Path $app.PSPath -Name DisplayName -ErrorAction SilentlyContinue).DisplayName
-
-                    if ($displayName -and $displayName -like "*$softwareName*") {
-                        $found = $true
-                        Write-Host "Found installed software: $displayName"
-
-                        $uninstallString = (Get-ItemProperty -Path $app.PSPath -Name UninstallString -ErrorAction SilentlyContinue).UninstallString
-
-                        if ($uninstallString) {
-                            Write-Host "Attempting to uninstall $displayName..."
-
-                            # Sometimes uninstall string contains parameters; handle accordingly
-                            $uninstallExe, $uninstallArgs = $null, $null
-
-                            if ($uninstallString -match '\"(.+?)\"(.*)') {
-                                $uninstallExe = $matches[1]
-                                $uninstallArgs = $matches[2].Trim()
-                            } else {
-                                $parts = $uninstallString.Split(" ", 2)
-                                $uninstallExe = $parts[0]
-                                $uninstallArgs = if ($parts.Length -gt 1) { $parts[1] } else { "" }
-                            }
-
-                            # Add silent uninstall parameters if common (may vary by software)
-                            if ($uninstallExe -like "*.msi") {
-                                $uninstallArgs = "/x `"$uninstallExe`" /quiet /norestart"
-                                $uninstallExe = "msiexec.exe"
-                            } else {
-                                # Add common silent flags for EXE uninstallers
-                                if (-not ($uninstallArgs -match "/quiet|/silent|/s")) {
-                                    $uninstallArgs += " /S /quiet /qn"
-                                }
-                            }
-
-                            try {
-                                Start-Process -FilePath $uninstallExe -ArgumentList $uninstallArgs -Wait -NoNewWindow
-                                Write-Host "$displayName uninstalled successfully." -ForegroundColor Green
-                            } catch {
-                                Write-Host "Failed to uninstall $displayName : $_" -ForegroundColor Red
-                            }
-                        } else {
-                            Write-Host "No uninstall string found for $displayName." -ForegroundColor Yellow
-                        }
+                foreach ($file in $foundFiles) {
+                    Write-Host "Found unwanted file: $($file.FullName)"
+                    try {
+                        Remove-Item -Path $file.FullName -Force -ErrorAction Stop
+                        Write-Host "Removed file: $($file.FullName)" -ForegroundColor Green
+                    } catch {
+                        Write-Host "Failed to remove $($file.FullName): $_" -ForegroundColor Red
                     }
                 }
+                if (-not $foundFiles) {
+                    Write-Host "No files found matching pattern '$filePattern' on drive $drive."
+                }
+            } catch {
+                Write-Host "Error searching for files '$filePattern' on drive $drive : $_" -ForegroundColor Red
             }
-
-            if (-not $found) {
-                Write-Host "$softwareName is not installed." -ForegroundColor Green
-            }
-        } catch {
-            Write-Host "An error occurred processing $softwareName : $_" -ForegroundColor Red
         }
     }
 
-    Write-Host "`n--- Unwanted Software Removal Complete ---`n"
+    Write-Host "`n--- Unwanted Software File Removal Complete ---`n"
 }
 
     
-
-
 function Malware {
     Write-Host "`n--- Starting: Malware Protection & Removal ---`n" -ForegroundColor $ColorHeader
 

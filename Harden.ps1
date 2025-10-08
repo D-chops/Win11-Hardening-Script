@@ -186,39 +186,7 @@ function Enable-Updates {
 function Local-Policies {
     Write-Host "`n--- Starting: Local Policies ---`n"
 
-    # Helper function to remove 'Take Ownership' privilege
-    function Remove-TakeOwnershipPrivilege {
-        Write-Host "Removing 'Take Ownership' privilege from all users..."
-        $exportInf = "$env:TEMP\export.inf"
-        $modifiedInf = "$env:TEMP\modified.inf"
-        $seceditLog = "$env:TEMP\secedit.log"
-
-        try {
-            # Export current security policy
-            secedit /export /cfg $exportInf /quiet
-
-            # Read the exported INF content
-            $content = Get-Content $exportInf
-
-            # Clear the SeTakeOwnershipPrivilege line
-            $newContent = $content -replace 'SeTakeOwnershipPrivilege\s*=\s*.*', 'SeTakeOwnershipPrivilege ='
-
-            # Save the modified INF file with Unicode encoding
-            $newContent | Set-Content -Path $modifiedInf -Encoding Unicode
-
-            # Apply the modified security policy
-            secedit /configure /db secedit.sdb /cfg $modifiedInf /quiet /log $seceditLog
-
-            # Cleanup temporary files
-            Remove-Item $exportInf, $modifiedInf -Force -ErrorAction SilentlyContinue
-
-            Write-Host "'Take Ownership' privilege successfully removed from all users."
-            Write-Host "Note: A reboot or user logoff/logon may be required for the changes to take effect."
-        }
-        catch {
-            Write-Host "Error removing 'Take Ownership' privilege: $_" -ForegroundColor Red
-        }
-    }
+    # Your existing code here ...
 
     # Auditing for Logon Events
     $auditLogon = Read-Host "Enable auditing for Logon Events? (Y/n) [Default: Y]"
@@ -320,7 +288,8 @@ function Local-Policies {
             Write-Host "Skipping execution policy change for current user."
         }
     }
-     # ====== New Section: Disable Guest Account ======
+
+    # ====== New Section: Disable Guest Account ======
     $disableGuest = Read-Host "Do you want to disable the Guest account? (Y/n) [Default: Y]"
     if ($disableGuest -match "^[Yy]$" -or $disableGuest -eq "") {
         try {
@@ -340,10 +309,9 @@ function Local-Policies {
         Write-Host "Skipped disabling the Guest account."
     }
 
-    # Your existing code continues ...
-
     Write-Host "`n--- Local Policies Complete ---`n"
 }
+
 function User-Auditing {
 
     # --- Internal function: Prompt user with Yes/No, default No ---

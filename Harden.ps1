@@ -323,51 +323,81 @@ function Local-Policies {
     Write-Host "`n--- Local Policies Complete ---`n"
 }
 
-function Review-GroupMembers {
+function User-Auditing {
     param (
-        [Parameter(Mandatory = $true)]
-        [string]$GroupName
+        [string]$Message
     )
+    $choice = Read-Host "$Message [y/N]"
+    return ($choice -match '^(?i)y(es)?$')
+}
 
-    Write-Host "`n=== Auditing group: $GroupName ===" -ForegroundColor $ColorHeader
+function User-Auditing {
+    Write-Host "`n=========== LOCAL USER AUDITING ===========`n"
 
-    try {
-        $members = Get-LocalGroupMember -Group $GroupName -ErrorAction Stop
-    } catch {
-        Write-Host "Group '$GroupName' not found or error occurred." -ForegroundColor $ColorWarning
-        return
-    }
+    # Define excluded (built-in) users
+    $excludedUsers = @('Administrator', 'DefaultAccount', 'Guest', 'WDAGUtilityAccount')
 
-    foreach ($member in $members) {
-        Write-Host "Is " -NoNewline
-        Write-Host "$($member.Name)" -ForegroundColor $ColorName -NoNewline
-        Write-Host " authorized to be in " -NoNewline
-        Write-Host "$GroupName" -ForegroundColor $ColorName -NoNewline
-        Write-Host "? [Y/n] (default Y) " -ForegroundColor $ColorPrompt -NoNewline
-        $response = Read-Host
+    # 1. Audit Local Users
+    Write-Host "`n--- Local Users ---`n"
+    $localUsers = Get-LocalUser | Where-Object { $_.Name -notin $excludedUsers }
 
-        if ($response -match '^[Nn]') {
+    foreach ($user in $localUsers) {
+        Write-Host "User: $($user.Name)"
+        if (Prompt-YesNoDefaultNo "Do you want to remove user '$($user.Name)'?") {
             try {
-                Remove-LocalGroupMember -Group $GroupName -Member $member.Name -ErrorAction Stop
-                Write-Host "'$($member.Name)' removed from '$GroupName'." -ForegroundColor $ColorRemoved
-
-                # Prompt to downgrade to standard user
-                $downgrade = Read-Host "Do you want to add '$($member.Name)' to the 'Users' group? (Y/n) [Default: Y]"
-                if ($downgrade -eq "" -or $downgrade -match "^[Yy]$") {
-                    Add-LocalGroupMember -Group "Users" -Member $member.Name -ErrorAction Stop
-                    Write-Host "'$($member.Name)' added to 'Users' group." -ForegroundColor $ColorKept
-                } else {
-                    Write-Host "'$($member.Name)' was not added to 'Users' group." -ForegroundColor $ColorWarning
-                }
+                Remove-LocalUser -Name $user.Name
+                Write-Host "Removed user: $($user.Name)" -ForegroundColor Green
             } catch {
-                Write-Host "Failed to modify group membership for '$($member.Name)': $_" -ForegroundColor $ColorWarning
+                Write-Host "Failed to remove user: $($user.Name). Error: $_" -ForegroundColor Red
             }
         } else {
-            Write-Host "'$($member.Name)' kept in '$GroupName'." -ForegroundColor $ColorKept
+            Write-Host "Skipped user: $($user.Name)"
         }
     }
 
-    Write-Host "`nReview complete for group: $GroupName" -ForegroundColor $ColorHeader
+    # 2. Audit Administrators Group Members
+    Write-Host "`n--- Administrators Group Members ---`n"
+    $adminGroup = 'Administrators'
+    $adminMembers = Get-LocalGroupMember -Group $adminGroup
+
+    foreach ($member in $adminMembers) {
+        if ($member.ObjectClass -eq 'User') {
+            Write-Host "Admin User: $($member.Name)"
+            if (Prompt-YesNoDefaultNo "Do you want to remove '$($member.Name)' from Administrators group?") {
+                try {
+                    Remove-LocalGroupMember -Group $adminGroup -Member $member.Name
+                    Write-Host "Removed $($member.Name) from Administrators group" -ForegroundColor Green
+                } catch {
+                    Write-Host "Failed to remove $($member.Name). Error: $_" -ForegroundColor Red
+                }
+            } else {
+                Write-Host "Skipped: $($member.Name)"
+            }
+        }
+    }
+
+    # 3. Optionally Add a New Local User
+    Write-Host "`n--- Add a New Local User ---`n"
+    if (Prompt-YesNoDefaultNo "Would you like to add a new local user?") {
+        $newUser = Read-Host "Enter new username"
+        $password = Read-Host "Enter password for $newUser" -AsSecureString
+
+        try {
+            New-LocalUser -Name $newUser -Password $password -FullName $newUser -Description "Created via user auditing script"
+            Write-Host "User '$newUser' created successfully." -ForegroundColor Green
+
+            if (Prompt-YesNoDefaultNo "Add '$newUser' to Administrators group?") {
+                Add-LocalGroupMember -Group "Administrators" -Member $newUser
+                Write-Host "Added '$newUser' to Administrators group." -ForegroundColor Green
+            }
+        } catch {
+            Write-Host "Failed to create user. Error: $_" -ForegroundColor Red
+        }
+    } else {
+        Write-Host "No user was added."
+    }
+
+    Write-Host "`n=========== AUDIT COMPLETE ===========`n"
 }
 
 function Account-Policies {

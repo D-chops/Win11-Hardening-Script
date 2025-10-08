@@ -158,7 +158,7 @@ function Enable-Updates {
             Write-Host "Windows Update service is already running." -ForegroundColor $ColorKept
         }
 
-        # Set Windows Update to Automatic
+        # Set Windows Update service startup type to Automatic
         Write-Host "Setting Windows Update service to Automatic..." -ForegroundColor $ColorHeader
         Set-Service -Name "wuauserv" -StartupType Automatic
         Write-Host "Windows Update service startup type set to Automatic." -ForegroundColor $ColorKept
@@ -175,12 +175,24 @@ function Enable-Updates {
 
         Write-Host "Windows Updates are now enabled and set to automatically download and install updates." -ForegroundColor $ColorKept
 
+        # Trigger an immediate update check and install
+        Write-Host "Triggering Windows Update to check and install updates now..." -ForegroundColor $ColorHeader
+        
+        # On Windows 10/11, UsoClient is preferred
+        Start-Process -FilePath "UsoClient.exe" -ArgumentList "StartInstall" -NoNewWindow -Wait
+        
+        # Alternatively, for older Windows versions (commented out)
+        # Start-Process -FilePath "wuauclt.exe" -ArgumentList "/detectnow", "/updatenow" -NoNewWindow -Wait
+
+        Write-Host "Update check and install triggered." -ForegroundColor $ColorKept
+
         Write-Host "`n--- Enable updates Complete ---`n"
     }
     catch {
         Write-Host "Failed to enable updates: $_" -ForegroundColor $ColorWarning
     }
 }
+
 
 
 function Local-Policies {

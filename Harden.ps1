@@ -324,14 +324,16 @@ function Local-Policies {
 }
 
 function User-Auditing {
-    param (
-        [string]$Message
-    )
-    $choice = Read-Host "$Message [y/N]"
-    return ($choice -match '^(?i)y(es)?$')
-}
 
-function User-Auditing {
+    # --- Internal function: Prompt user with Yes/No, default No ---
+    function Prompt-YesNoDefaultNo {
+        param (
+            [string]$Message
+        )
+        $choice = Read-Host "$Message [y/N]"
+        return ($choice -match '^(?i)y(es)?$')
+    }
+
     Write-Host "`n=========== LOCAL USER AUDITING ===========`n"
 
     # Define excluded (built-in) users

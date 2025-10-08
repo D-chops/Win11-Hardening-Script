@@ -289,10 +289,11 @@ function Local-Policies {
         }
     }
 
-    # ====== New Section: Disable Guest Account ======
-    $disableGuest = Read-Host "Do you want to disable the Guest account? (Y/n) [Default: Y]"
-    if ($disableGuest -match "^[Yy]$" -or $disableGuest -eq "") {
-        try {
+  # ====== New Section: Disable Guest Account ======
+$disableGuest = Read-Host "Do you want to disable the Guest account? (Y/n) [Default: Y]"
+if ($disableGuest -match "^[Yy]$" -or $disableGuest -eq "") {
+    try {
+        if (Get-Command Get-LocalUser -ErrorAction SilentlyContinue) {
             $guest = Get-LocalUser -Name "Guest" -ErrorAction Stop
             if ($guest.Enabled) {
                 Disable-LocalUser -Name "Guest"
@@ -300,18 +301,21 @@ function Local-Policies {
             } else {
                 Write-Host "Guest account is already disabled." -ForegroundColor Yellow
             }
-        }
-        catch {
-            Write-Host "Guest account not found or error: $_" -ForegroundColor Yellow
+        } else {
+            # Fallback for systems without Get-LocalUser cmdlets
+            wmic useraccount where name='Guest' set Disabled=true
+            Write-Host "Guest account has been disabled via WMIC." -ForegroundColor Green
         }
     }
-    else {
-        Write-Host "Skipped disabling the Guest account."
+    catch {
+        Write-Host "Guest account not found or error: $_" -ForegroundColor Yellow
     }
-
+}
+else {
+    Write-Host "Skipped disabling the Guest account."
+}
     Write-Host "`n--- Local Policies Complete ---`n"
 }
-
 function User-Auditing {
 
     # --- Internal function: Prompt user with Yes/No, default No ---

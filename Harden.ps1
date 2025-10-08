@@ -657,10 +657,10 @@ function Defensive-Countermeasures {
         }
 
         # Option 1: Block Known Malicious IPs
-        $blockIP = Read-Host "Do you want to block known malicious IP addresses? (Y/n) [Default: Y]"
+        $blockIP = Read-Host "Do you want to block known malicious IP addresses? (Y/n) [Default: Y]" -ForegroundColor $ColorPrompt
         if ($blockIP -match "^[Yy]$" -or $blockIP -eq "") {
             Write-Host "Blocking access to known malicious IP addresses..." -ForegroundColor $ColorHeader
-            $blockedIPs = @("192.168.1.100", "203.0.113.45")  # Add known malicious IPs here
+            $blockedIPs = @("192.168.1.100", "203.0.113.45")  # Add known malicious IPs
             foreach ($ip in $blockedIPs) {
                 New-NetFirewallRule -DisplayName "Block Malware IP: $ip" -Direction Outbound -Action Block -RemoteAddress $ip -ErrorAction SilentlyContinue
                 Write-Host "Blocked IP: $ip" -ForegroundColor $ColorRemoved
@@ -668,7 +668,7 @@ function Defensive-Countermeasures {
         }
 
         # Option 2: Disable Unsafe File Types (Script Execution)
-        $disableFileTypes = Read-Host "Do you want to disable unsafe file types from running? (Y/n) [Default: Y]"
+        $disableFileTypes = Read-Host "Do you want to disable unsafe file types from running? (Y/n) [Default: Y]" -ForegroundColor $ColorPrompt
         if ($disableFileTypes -match "^[Yy]$" -or $disableFileTypes -eq "") {
             Write-Host "Setting execution policy to 'Restricted'..." -ForegroundColor $ColorHeader
             try {
@@ -680,7 +680,7 @@ function Defensive-Countermeasures {
         }
 
         # Option 3: Monitor & Block Registry Changes
-        $monitorRegistry = Read-Host "Do you want to block registry changes by malware? (Y/n) [Default: Y]"
+        $monitorRegistry = Read-Host "Do you want to block registry changes by malware? (Y/n) [Default: Y]" -ForegroundColor $ColorPrompt
         if ($monitorRegistry -match "^[Yy]$" -or $monitorRegistry -eq "") {
             Write-Host "Blocking registry tools for malware defense..." -ForegroundColor $ColorHeader
             try {
@@ -695,63 +695,7 @@ function Defensive-Countermeasures {
     } catch {
         Write-Host "An unexpected error occurred: $_" -ForegroundColor Red
     }
-
-    # Nested function: Ensure Security Center service is running and set to automatic
-    function Ensure-SecurityCenterEnabled {
-        $serviceName = "wscsvc"
-
-        $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
-
-        if ($null -eq $service) {
-            Write-Host "Security Center service not found!" -ForegroundColor Red
-            return
-        }
-
-        # Set service to auto start if not already
-        if ($service.StartType -ne 'Automatic') {
-            Set-Service -Name $serviceName -StartupType Automatic
-            Write-Host "Set Security Center service startup type to 'Automatic'."
-        }
-
-        # Start the service if not running
-        if ($service.Status -ne 'Running') {
-            try {
-                Start-Service -Name $serviceName
-                Write-Host "Started Security Center service." -ForegroundColor Green
-            } catch {
-                Write-Host "Failed to start Security Center service: $_" -ForegroundColor Red
-            }
-        } else {
-            Write-Host "Security Center service is already running and enabled." -ForegroundColor Green
-        }
-    }
-
-    # Call Ensure-SecurityCenterEnabled here
-    Ensure-SecurityCenterEnabled
-
-    # Nested function: Check Windows Action Center Monitoring Settings
-    function Check-ActionCenterMonitoring {
-        Write-Host "`nChecking Action Center security monitoring settings..." -ForegroundColor Cyan
-
-        # Registry path where Action Center settings are stored
-        $acPath = "HKLM:\SOFTWARE\Microsoft\Security Center\Monitoring"
-
-        # Common security providers monitored by Action Center
-        $components = @("Firewall", "Antivirus", "AntiSpyware", "InternetSettings", "UserAccountControl", "WindowsUpdate")
-
-        foreach ($component in $components) {
-            $keyPath = Join-Path $acPath $component
-            if (Test-Path $keyPath) {
-                $values = Get-ItemProperty -Path $keyPath
-                Write-Host "[$component] monitoring registry values:"
-                $values.PSObject.Properties | ForEach-Object {
-                    Write-Host (" - {0} = {1}" -f $_.Name, $_.Value)
-                }
-            } else {
-                Write-Host "[$component] monitoring key not found — may not be monitored!" -ForegroundColor Yellow
-            }
-        }
-    }
+    
 
     Write-Host "`n--- Defensive Countermeasures Complete ---`n" -ForegroundColor $ColorHeader
 }
@@ -1548,3 +1492,5 @@ function application-Security-Settings {
         default { Write-Host "`nInvalid selection. Please try again." }
     }
 } while ($true)
+# errors with 5,2,11,12
+#3 needs to downgrade scream

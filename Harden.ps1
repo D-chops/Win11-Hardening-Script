@@ -695,6 +695,59 @@ function Defensive-Countermeasures {
     } catch {
         Write-Host "An unexpected error occurred: $_" -ForegroundColor Red
     }
+    # Function: Ensure Security Center (wscsvc) is running and set to automatic
+function Ensure-SecurityCenterEnabled {
+    $serviceName = "wscsvc"
+
+    $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+
+    if ($null -eq $service) {
+        Write-Host "Security Center service not found!" -ForegroundColor Red
+        return
+    }
+
+    # Set service to auto start if not already
+    if ($service.StartType -ne 'Automatic') {
+        Set-Service -Name $serviceName -StartupType Automatic
+        Write-Host "Set Security Center service startup type to 'Automatic'."
+    }
+
+    # Start the service if not running
+    if ($service.Status -ne 'Running') {
+        try {
+            Start-Service -Name $serviceName
+            Write-Host "Started Security Center service." -ForegroundColor Green
+        } catch {
+            Write-Host "Failed to start Security Center service: $_" -ForegroundColor Red
+        }
+    } else {
+        Write-Host "Security Center service is already running and enabled." -ForegroundColor Green
+    }
+}
+
+# Function: Check Windows Action Center Monitoring Settings
+function Check-ActionCenterMonitoring {
+    Write-Host "`nChecking Action Center security monitoring settings..." -ForegroundColor Cyan
+
+    # Registry path where Action Center settings are stored
+    $acPath = "HKLM:\SOFTWARE\Microsoft\Security Center\Monitoring"
+
+    # Common security providers monitored by Action Center
+    $components = @("Firewall", "Antivirus", "AntiSpyware", "InternetSettings", "UserAccountControl", "WindowsUpdate")
+
+    foreach ($component in $components) {
+        $keyPath = Join-Path $acPath $component
+        if (Test-Path $keyPath) {
+            $values = Get-ItemProperty -Path $keyPath
+            Write-Host "[$component] monitoring registry values:"
+            $values.PSObject.Properties | ForEach-Object {
+                Write-Host (" - {0} = {1}" -f $_.Name, $_.Value)
+            }
+        } else {
+            Write-Host "[$component] monitoring key not found — may not be monitored!" -ForegroundColor Yellow
+        }
+    }
+}
 
     Write-Host "`n--- Defensive Countermeasures Complete ---`n" -ForegroundColor $ColorHeader
 }

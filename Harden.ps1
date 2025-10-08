@@ -397,6 +397,7 @@ function User-Auditing {
 
 function Account-Policies {
     Write-Host "`n--- Starting: Account-Policies ---`n"
+    
     Write-Host "Setting maximum password age to $MaxPasswordAge days..."
     Write-Host "Setting minimum password age to $MinPasswordAge days..."
     Write-Host "Setting minimum password length to $MinPasswordLength characters..."
@@ -405,10 +406,39 @@ function Account-Policies {
     Write-Host "Setting lockout duration to $LockoutDuration minutes..."
     Write-Host "Setting lockout window to $LockoutWindow minutes..."
 
+    # Apply password policies
     net accounts /maxpwage:$MaxPasswordAge /minpwage:$MinPasswordAge /minpwlen:$MinPasswordLength /uniquepw:$PasswordHistory /lockoutthreshold:$LockoutThreshold /lockoutduration:$LockoutDuration /lockoutwindow:$LockoutWindow
+
+    # Define the temporary password to set
+    $tempPassword = "1CyberPatriot!"
+
+    Write-Host "`nSetting temporary passwords for local user accounts..."
+
+    # Get all local users except built-in/system accounts (like Administrator, Guest)
+    $excludedUsers = @("Administrator", "Guest", "DefaultAccount", "WDAGUtilityAccount")
+    $localUsers = Get-LocalUser | Where-Object { $_.Name -notin $excludedUsers -and $_.Enabled }
+
+    foreach ($user in $localUsers) {
+        try {
+            Write-Host "Setting temporary password for user: $($user.Name)"
+            
+            # Set the temporary password
+            $securePassword = ConvertTo-SecureString $tempPassword -AsPlainText -Force
+            Set-LocalUser -Name $user.Name -Password $securePassword
+
+            # Force user to change password at next logon
+            net user $user.Name /logonpasswordchg:yes | Out-Null
+
+            Write-Host "Temporary password set and user will be prompted to change password at next logon." -ForegroundColor Green
+        }
+        catch {
+            Write-Host "Failed to set password for user $($user.Name): $_" -ForegroundColor Red
+        }
+    }
 
     Write-Host "`n--- Account-Policies Complete ---`n"
 }
+
 # =========================
 #  Function Definitions
 # =========================

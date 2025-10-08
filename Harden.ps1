@@ -564,6 +564,13 @@ function Local-Policies {
 
 
 function Defensive-Countermeasures {
+    # Define colors (adjust as you want)
+    $ColorHeader = "Cyan"
+    $ColorKept = "Green"
+    $ColorRemoved = "Red"
+    $ColorWarning = "Yellow"
+    $ColorPrompt = "Magenta"
+
     Write-Host "`n--- Starting: Defensive Countermeasures ---`n" -ForegroundColor $ColorHeader
 
     try {
@@ -577,22 +584,22 @@ function Defensive-Countermeasures {
 
                 if ($null -ne $policyValue) {
                     if ($policyValue.$policyName -eq 1) {
-                        Write-Host "Group Policy disables Real-Time Protection. Attempting to enable..."
+                        Write-Host "Group Policy disables Real-Time Protection. Attempting to enable..." -ForegroundColor $ColorWarning
                         try {
                             Set-ItemProperty -Path $policyPath -Name $policyName -Value 0 -ErrorAction Stop
-                            Write-Host "Registry updated to allow Real-Time Protection. A reboot or gpupdate may be required."
+                            Write-Host "Registry updated to allow Real-Time Protection. A reboot or gpupdate may be required." -ForegroundColor $ColorKept
                         } catch {
-                            Write-Host "Failed to update Group Policy registry key: $_"
+                            Write-Host "Failed to update Group Policy registry key: $_" -ForegroundColor $ColorRemoved
                             return $false
                         }
                     } else {
-                        Write-Host "Group Policy allows Real-Time Protection."
+                        Write-Host "Group Policy allows Real-Time Protection." -ForegroundColor $ColorKept
                     }
                 } else {
-                    Write-Host "No Group Policy disabling Real-Time Protection found."
+                    Write-Host "No Group Policy disabling Real-Time Protection found." -ForegroundColor $ColorKept
                 }
             } else {
-                Write-Host "No Group Policy for Real-Time Protection found."
+                Write-Host "No Group Policy for Real-Time Protection found." -ForegroundColor $ColorKept
             }
 
             # Attempt to enable Real-Time Protection
@@ -601,14 +608,14 @@ function Defensive-Countermeasures {
                 Start-Sleep -Seconds 2
                 $rtpStatus = (Get-MpComputerStatus).RealTimeProtectionEnabled
                 if ($rtpStatus) {
-                    Write-Host "Real-Time Protection successfully enabled."
+                    Write-Host "Real-Time Protection successfully enabled." -ForegroundColor $ColorKept
                     return $true
                 } else {
-                    Write-Host "Real-Time Protection did NOT enable. Tamper Protection or remaining policies may be blocking it."
+                    Write-Host "Real-Time Protection did NOT enable. Tamper Protection or remaining policies may be blocking it." -ForegroundColor $ColorWarning
                     return $false
                 }
             } catch {
-                Write-Host "Failed to enable Real-Time Protection: $_"
+                Write-Host "Failed to enable Real-Time Protection: $_" -ForegroundColor $ColorRemoved
                 return $false
             }
         }
@@ -657,10 +664,10 @@ function Defensive-Countermeasures {
         }
 
         # Option 1: Block Known Malicious IPs
-        $blockIP = Read-Host "Do you want to block known malicious IP addresses? (Y/n) [Default: Y]" -ForegroundColor $ColorPrompt
+        $blockIP = Read-Host "Do you want to block known malicious IP addresses? (Y/n) [Default: Y]" 
         if ($blockIP -match "^[Yy]$" -or $blockIP -eq "") {
             Write-Host "Blocking access to known malicious IP addresses..." -ForegroundColor $ColorHeader
-            $blockedIPs = @("192.168.1.100", "203.0.113.45")  # Add known malicious IPs
+            $blockedIPs = @("192.168.1.100", "203.0.113.45")  # Add known malicious IPs here
             foreach ($ip in $blockedIPs) {
                 New-NetFirewallRule -DisplayName "Block Malware IP: $ip" -Direction Outbound -Action Block -RemoteAddress $ip -ErrorAction SilentlyContinue
                 Write-Host "Blocked IP: $ip" -ForegroundColor $ColorRemoved
@@ -668,7 +675,7 @@ function Defensive-Countermeasures {
         }
 
         # Option 2: Disable Unsafe File Types (Script Execution)
-        $disableFileTypes = Read-Host "Do you want to disable unsafe file types from running? (Y/n) [Default: Y]" -ForegroundColor $ColorPrompt
+        $disableFileTypes = Read-Host "Do you want to disable unsafe file types from running? (Y/n) [Default: Y]" 
         if ($disableFileTypes -match "^[Yy]$" -or $disableFileTypes -eq "") {
             Write-Host "Setting execution policy to 'Restricted'..." -ForegroundColor $ColorHeader
             try {
@@ -680,7 +687,7 @@ function Defensive-Countermeasures {
         }
 
         # Option 3: Monitor & Block Registry Changes
-        $monitorRegistry = Read-Host "Do you want to block registry changes by malware? (Y/n) [Default: Y]" -ForegroundColor $ColorPrompt
+        $monitorRegistry = Read-Host "Do you want to block registry changes by malware? (Y/n) [Default: Y]" 
         if ($monitorRegistry -match "^[Yy]$" -or $monitorRegistry -eq "") {
             Write-Host "Blocking registry tools for malware defense..." -ForegroundColor $ColorHeader
             try {
@@ -692,65 +699,75 @@ function Defensive-Countermeasures {
             }
         }
 
-    } catch {
-        Write-Host "An unexpected error occurred: $_" -ForegroundColor Red
-    }
-    # Function: Ensure Security Center (wscsvc) is running and set to automatic
-function Ensure-SecurityCenterEnabled {
-    $serviceName = "wscsvc"
+        # ----- Inserted Action Center Enable & Check -----
 
-    $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+        # Ensure Security Center (wscsvc) is running and set to automatic
+        function Ensure-SecurityCenterEnabled {
+            $serviceName = "wscsvc"
 
-    if ($null -eq $service) {
-        Write-Host "Security Center service not found!" -ForegroundColor Red
-        return
-    }
+            $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
 
-    # Set service to auto start if not already
-    if ($service.StartType -ne 'Automatic') {
-        Set-Service -Name $serviceName -StartupType Automatic
-        Write-Host "Set Security Center service startup type to 'Automatic'."
-    }
-
-    # Start the service if not running
-    if ($service.Status -ne 'Running') {
-        try {
-            Start-Service -Name $serviceName
-            Write-Host "Started Security Center service." -ForegroundColor Green
-        } catch {
-            Write-Host "Failed to start Security Center service: $_" -ForegroundColor Red
-        }
-    } else {
-        Write-Host "Security Center service is already running and enabled." -ForegroundColor Green
-    }
-}
-
-# Function: Check Windows Action Center Monitoring Settings
-function Check-ActionCenterMonitoring {
-    Write-Host "`nChecking Action Center security monitoring settings..." -ForegroundColor Cyan
-
-    # Registry path where Action Center settings are stored
-    $acPath = "HKLM:\SOFTWARE\Microsoft\Security Center\Monitoring"
-
-    # Common security providers monitored by Action Center
-    $components = @("Firewall", "Antivirus", "AntiSpyware", "InternetSettings", "UserAccountControl", "WindowsUpdate")
-
-    foreach ($component in $components) {
-        $keyPath = Join-Path $acPath $component
-        if (Test-Path $keyPath) {
-            $values = Get-ItemProperty -Path $keyPath
-            Write-Host "[$component] monitoring registry values:"
-            $values.PSObject.Properties | ForEach-Object {
-                Write-Host (" - {0} = {1}" -f $_.Name, $_.Value)
+            if ($null -eq $service) {
+                Write-Host "Security Center service not found!" -ForegroundColor $ColorRemoved
+                return
             }
-        } else {
-            Write-Host "[$component] monitoring key not found — may not be monitored!" -ForegroundColor Yellow
+
+            # Set service to auto start if not already
+            if ($service.StartType -ne 'Automatic') {
+                Set-Service -Name $serviceName -StartupType Automatic
+                Write-Host "Set Security Center service startup type to 'Automatic'." -ForegroundColor $ColorKept
+            }
+
+            # Start the service if not running
+            if ($service.Status -ne 'Running') {
+                try {
+                    Start-Service -Name $serviceName
+                    Write-Host "Started Security Center service." -ForegroundColor $ColorKept
+                } catch {
+                    Write-Host "Failed to start Security Center service: $_" -ForegroundColor $ColorWarning
+                }
+            } else {
+                Write-Host "Security Center service is already running and enabled." -ForegroundColor $ColorKept
+            }
         }
+
+        # Check Windows Action Center Monitoring Settings
+        function Check-ActionCenterMonitoring {
+            Write-Host "`nChecking Action Center security monitoring settings..." -ForegroundColor $ColorHeader
+
+            # Registry path where Action Center settings are stored
+            $acPath = "HKLM:\SOFTWARE\Microsoft\Security Center\Monitoring"
+
+            # Common security providers monitored by Action Center
+            $components = @("Firewall", "Antivirus", "AntiSpyware", "InternetSettings", "UserAccountControl", "WindowsUpdate")
+
+            foreach ($component in $components) {
+                $keyPath = Join-Path $acPath $component
+                if (Test-Path $keyPath) {
+                    $values = Get-ItemProperty -Path $keyPath
+                    Write-Host "[$component] monitoring registry values:"
+                    $values.PSObject.Properties | ForEach-Object {
+                        Write-Host (" - {0} = {1}" -f $_.Name, $_.Value)
+                    }
+                } else {
+                    Write-Host "[$component] monitoring key not found — may not be monitored!" -ForegroundColor $ColorWarning
+                }
+            }
+        }
+
+        # Run the Action Center checks
+        Ensure-SecurityCenterEnabled
+        Check-ActionCenterMonitoring
+
+    } catch {
+        Write-Host "An unexpected error occurred: $_" -ForegroundColor $ColorRemoved
     }
-}
 
     Write-Host "`n--- Defensive Countermeasures Complete ---`n" -ForegroundColor $ColorHeader
 }
+
+# To run the function, just call:
+# Defensive-Countermeasures
 
 function Uncategorized-OS-Settings {
     Write-Host "`n--- Starting: Uncategorized OS Settings ---`n"

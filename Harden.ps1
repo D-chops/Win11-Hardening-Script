@@ -48,10 +48,20 @@ function Document-System {
 
     try {
         $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
-        $outputFile = ".\SystemDocumentation_$timestamp.txt"
 
-        Write-Host "`nGenerating system documentation report..."
-        Write-Host "Output file: $outputFile"
+        # Create a folder on the desktop
+        $desktop = [Environment]::GetFolderPath("Desktop")
+        $outputFolder = Join-Path $desktop "SystemDocs"
+        if (-not (Test-Path $outputFolder)) {
+            New-Item -ItemType Directory -Path $outputFolder | Out-Null
+            Write-Host "`n[INFO] Created folder: $outputFolder"
+        }
+
+        # Define output file path
+        $outputFile = Join-Path $outputFolder "SystemDocumentation_$timestamp.txt"
+
+        Write-Host "`n[INFO] Generating system documentation report..."
+        Write-Host "[INFO] Output file: $outputFile"
 
         $report = @()
 
@@ -97,10 +107,18 @@ function Document-System {
         $report += ($services | Out-String)
         $report += ""
 
+        # Save report
         $report | Out-File -FilePath $outputFile -Encoding UTF8
 
-        Write-Host "`nSystem documentation completed successfully." -ForegroundColor Green
-        Write-Host "Report saved to: $outputFile"
+        Write-Host "`n[INFO] System documentation completed successfully." -ForegroundColor Green
+        Write-Host "[INFO] Report saved to: $outputFile"
+
+        # Show all .txt files in folder
+        Write-Host "`n[INFO] All reports in folder:"
+        Get-ChildItem -Path $outputFolder -Filter *.txt | 
+            Sort-Object LastWriteTime -Descending |
+            Select-Object LastWriteTime, Name | 
+            Format-Table -AutoSize
     }
     catch {
         Write-Host "`n[!] An error occurred while documenting the system:" -ForegroundColor Red
@@ -108,9 +126,10 @@ function Document-System {
     }
     finally {
         Write-Host "`nReturning to main menu..."
-        Start-Sleep -Seconds 2
+        Start-Sleep -Seconds 3
     }
 }
+
 
 # -------------------------------
 # MAIN LOOP

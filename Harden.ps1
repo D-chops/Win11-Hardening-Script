@@ -25,7 +25,7 @@ $menuOptions = @(
 )
 
 # -------------------------------
-# FUNCTIONS
+# FUNCTIONSs
 # -------------------------------
 
 function Show-Menu {
